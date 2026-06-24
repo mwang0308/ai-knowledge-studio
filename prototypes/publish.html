@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>审核发布</title><link rel="stylesheet" href="./studio.css"></head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="brand-mark">知</span>知识库平台</div>
+    <nav class="nav">
+      <a href="./index.html">首页</a>
+      <a href="./knowledge.html">知识库</a>
+      <a href="./directory.html">目录</a>
+      <a href="./upload.html">文档上传</a>
+      <a href="./document.html">文档处理</a>
+      <a href="./retrieval.html">检索测试</a>
+      <a class="active" href="./publish.html">审核发布</a>
+    </nav>
+  </aside>
+  <main>
+    <header class="top"><div class="crumb">审核发布</div><div>admin</div></header>
+    <section class="main">
+      <div class="title">
+        <div><h1>审核发布</h1><div class="sub">只处理已完成文档处理和检索测试的发布审核；测试未通过的文档需要先回到检索测试。</div></div>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="filter-bar">
+            <select class="select"><option>全部知识库</option><option>财务共享知识库</option></select>
+            <select class="select"><option>全部目录</option><option>报销制度 / 费用标准</option></select>
+            <select class="select"><option>全部审核状态</option><option>待审核</option><option>已驳回</option><option>已通过</option></select>
+            <select class="select"><option>全部发布状态</option><option>待发布</option><option>已发布</option><option>已下架</option></select>
+            <input class="input" type="date" aria-label="发布时间">
+          </div>
+          <div class="btns"><span class="status amber">待审核 18</span><span class="status blue">待发布 6</span><span class="status green">已发布 210</span></div>
+        </div>
+        <div class="panel-body">
+          <table class="table">
+            <thead><tr><th>文档</th><th>知识库</th><th>目录</th><th>版本</th><th>处理状态</th><th>检索测试</th><th>测试时间</th><th>审核状态</th><th>发布状态</th><th>发布时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr class="active"><td>财务共享报账手册V2.0.docx</td><td>财务共享知识库</td><td>报销制度 / 费用标准</td><td>v2</td><td><span class="status green">完成</span></td><td><span class="status green">通过</span></td><td>2026-06-24 10:18</td><td><span class="status amber">待审核</span></td><td><span class="status amber">未发布</span></td><td>-</td><td><span class="ops"><a class="link" href="#review-modal">审核</a></span></td></tr>
+              <tr><td>差旅审批说明.pdf</td><td>财务共享知识库</td><td>报销制度 / 审批流程</td><td>v1</td><td><span class="status green">完成</span></td><td><span class="status green">通过</span></td><td>2026-06-23 15:12</td><td><span class="status green">已通过</span></td><td><span class="status blue">待发布</span></td><td>-</td><td><span class="ops"><a class="link" href="#review-modal">查看</a><a class="link" href="#publish-modal">发布</a></span></td></tr>
+              <tr><td>住宿标准.csv</td><td>财务共享知识库</td><td>报销制度 / 费用标准</td><td>v1</td><td><span class="status green">完成</span></td><td><span class="status red">未通过</span></td><td>2026-06-23 16:40</td><td><span class="status amber">待处理</span></td><td><span class="status amber">不可发布</span></td><td>-</td><td><span class="ops"><a class="link" href="./retrieval.html">去测试</a></span></td></tr>
+              <tr><td>交通补贴说明.docx</td><td>财务共享知识库</td><td>报销制度 / 审批流程</td><td>v1</td><td><span class="status green">完成</span></td><td><span class="status green">通过</span></td><td>2026-06-22 11:18</td><td><span class="status green">已通过</span></td><td><span class="status green">已发布</span></td><td>2026-06-22 14:30</td><td><span class="ops"><a class="link" href="#review-modal">查看</a><a class="link">下架</a></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<section id="review-modal" class="modal-layer">
+  <a class="modal-mask" href="./publish.html"></a>
+  <div class="modal wide">
+    <div class="panel-head"><h2>审核详情</h2><span class="status blue">财务共享报账手册V2.0.docx / v2</span></div>
+    <div class="panel-body">
+      <table class="table">
+        <thead><tr><th>检查项</th><th>结果说明</th><th>状态</th></tr></thead>
+        <tbody><tr><td>原文版本</td><td>v2，原始文件与处理产物可追溯</td><td><span class="status green">通过</span></td></tr><tr><td>结构完整</td><td>章节、页码、结构块完整</td><td><span class="status green">通过</span></td></tr><tr><td>分片可追溯</td><td>128 个分片均带来源页码与 block_id</td><td><span class="status green">通过</span></td></tr><tr><td>检索测试</td><td>Top1 命中 chunk_003，相似度 0.92</td><td><span class="status green">通过</span></td></tr></tbody>
+      </table>
+      <div class="form" style="margin-top:18px;">
+        <div class="field"><label>审核意见</label><textarea class="textarea" placeholder="请输入审核意见，驳回时必填。"></textarea></div>
+      </div>
+      <div class="btns" style="justify-content:flex-end;margin-top:18px;"><a class="btn" href="./publish.html">关闭</a><a class="btn red">驳回</a><a class="btn green">审核通过</a></div>
+    </div>
+  </div>
+</section>
+
+<section id="publish-modal" class="modal-layer">
+  <a class="modal-mask" href="./publish.html"></a>
+  <div class="modal">
+    <div class="panel-head"><h2>发布确认</h2><span class="status amber">待发布</span></div>
+    <div class="panel-body">
+      <table class="kv">
+        <tr><td>文档</td><td>财务共享报账手册V2.0.docx</td></tr>
+        <tr><td>版本</td><td>v2</td></tr>
+        <tr><td>发布范围</td><td>财务共享知识库 / 报销制度 / 费用标准</td></tr>
+        <tr><td>索引状态</td><td>ES / Milvus 已写入，enabled=false</td></tr>
+      </table>
+      <div class="detail-card" style="margin-top:16px;">发布后该版本分片会启用正式检索，旧版本保持可追溯但不再命中。</div>
+      <div class="btns" style="justify-content:flex-end;margin-top:18px;"><a class="btn" href="./publish.html">取消</a><a class="btn primary">确认发布</a></div>
+    </div>
+  </div>
+</section>
+<script src="./studio.js"></script>
+</body>
+</html>

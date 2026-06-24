@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>知识库平台 - 首页</title><link rel="stylesheet" href="./studio.css"></head>
+<body>
+<div class="app">
+  <aside class="side"><div class="brand"><span class="brand-mark">知</span>知识库平台</div><nav class="nav"><a class="active" href="./index.html">首页</a><a href="./knowledge.html">知识库</a><a href="./directory.html">目录</a><a href="./upload.html">文档上传</a><a href="./document.html">文档处理</a><a href="./retrieval.html">检索测试</a><a href="./publish.html">审核发布</a></nav></aside>
+  <main><header class="top"><div class="crumb">首页 / 知识库工作台</div><div>admin</div></header>
+    <section class="main">
+      <div class="title"><div><h1>知识库工作台</h1><div class="sub">首页仅展示整体状态、流程进度和待办概览，不承载具体操作。</div></div></div>
+      <div class="grid cols-4"><div class="panel metric"><label>知识库</label><strong>8</strong></div><div class="panel metric"><label>文档总量</label><strong>1,286</strong></div><div class="panel metric"><label>待审核</label><strong style="color:var(--amber)">18</strong></div><div class="panel metric"><label>处理失败</label><strong style="color:var(--red)">6</strong></div></div>
+      <section class="panel" style="margin-top:18px;"><div class="panel-head"><h2>知识治理流程</h2><span class="status blue">层级：知识库 → 目录 → 文档 → 结构块 → 分片</span></div><div class="panel-body"><div class="flow"><a href="./knowledge.html"><b>01</b><span>知识库</span><small>先创建知识空间</small></a><a href="./directory.html"><b>02</b><span>目录规则</span><small>在知识库下建目录</small></a><a href="./upload.html"><b>03</b><span>文档上传</span><small>挂到具体目录</small></a><a href="./document.html"><b>04</b><span>解析处理</span><small>Parser Router</small></a><a href="./document.html"><b>05</b><span>分片预览</span><small>结构块与 chunk</small></a><a href="./retrieval.html"><b>06</b><span>检索测试</span><small>验证命中来源</small></a><a href="./publish.html"><b>07</b><span>审核发布</span><small>启用正式检索</small></a></div></div></section>
+      <section class="panel" style="margin-top:18px;"><div class="panel-head"><h2>待办列表</h2><span class="status amber">选择文档后进入对应页面处理</span></div><div class="panel-body"><table class="table"><thead><tr><th>文档</th><th>知识库</th><th>目录</th><th>当前状态</th><th>下一步</th><th>操作</th></tr></thead><tbody><tr><td>财务共享报账手册V2.0.docx</td><td>财务共享知识库</td><td>报销制度</td><td><span class="status amber">待审核</span></td><td>审核发布</td><td><a class="link" href="./publish.html">处理</a></td></tr><tr><td>住宿标准.csv</td><td>财务共享知识库</td><td>费用标准</td><td><span class="status amber">待检索测试</span></td><td>检索测试</td><td><a class="link" href="./retrieval.html">测试</a></td></tr><tr><td>历史费用标准.pdf</td><td>财务共享知识库</td><td>费用标准</td><td><span class="status red">处理失败</span></td><td>查看日志</td><td><a class="link" href="./document.html">查看</a></td></tr></tbody></table></div></section>
+    </section>
+  </main>
+</div>
+</body>
+</html>
+
+
+

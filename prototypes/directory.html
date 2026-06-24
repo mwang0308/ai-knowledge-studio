@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>目录管理</title><link rel="stylesheet" href="./studio.css"></head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="brand-mark">知</span>知识库平台</div>
+    <nav class="nav">
+      <a href="./index.html">首页</a>
+      <a href="./knowledge.html">知识库</a>
+      <a class="active" href="./directory.html">目录</a>
+      <a href="./upload.html">文档上传</a>
+      <a href="./document.html">文档处理</a>
+      <a href="./retrieval.html">检索测试</a>
+      <a href="./publish.html">审核发布</a>
+    </nav>
+  </aside>
+  <main>
+    <header class="top"><div class="crumb">知识库 / 财务共享知识库 / 目录管理</div><div>admin</div></header>
+    <section class="main">
+      <div class="title">
+        <div><h1>目录管理</h1><div class="sub">当前知识库：财务共享知识库。这里保留目录级操作：上传文档、文档列表、编辑、停用、删除。</div></div>
+        <div class="btns"><a class="btn primary" href="#directory-modal">新增目录</a><a class="btn" href="./knowledge.html">返回知识库</a></div>
+      </div>
+      <section class="panel">
+        <div class="panel-head"><div class="filter-bar"><input class="input" placeholder="搜索目录路径"><select class="select"><option>全部状态</option><option>启用</option><option>停用</option></select><select class="select"><option>全部负责人</option><option>财务标准管理员</option><option>财务流程管理员</option></select><input class="input" type="date" aria-label="创建时间"></div><div class="btns"><span class="status blue">财务共享知识库</span><span class="status amber">6 个目录待审核</span></div></div>
+        <div class="panel-body">
+          <table class="table">
+            <thead><tr><th>目录路径</th><th>负责人</th><th>文档</th><th>已发布</th><th>待审核</th><th>默认分片</th><th>审核规则</th><th>状态</th><th>创建时间</th><th>修改时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr class="active"><td>报销制度 / 费用标准</td><td>财务标准管理员</td><td>27</td><td>21</td><td>6</td><td>表格文档分片配置</td><td>需要审核</td><td><span class="status green">启用</span></td><td>2026-05-19</td><td>2026-06-24</td><td><span class="ops"><a class="link" href="./upload.html">上传文档</a><a class="link" href="./document.html">文档列表</a><a class="link" href="#directory-modal">编辑</a><a class="link">停用</a><a class="link">删除</a></span></td></tr>
+              <tr><td>报销制度 / 审批流程</td><td>财务流程管理员</td><td>22</td><td>18</td><td>3</td><td>制度文档分片</td><td>需要审核</td><td><span class="status green">启用</span></td><td>2026-05-20</td><td>2026-06-21</td><td><span class="ops"><a class="link" href="./upload.html">上传文档</a><a class="link" href="./document.html">文档列表</a><a class="link" href="#directory-modal">编辑</a><a class="link">停用</a><a class="link">删除</a></span></td></tr>
+              <tr><td>报销制度 / 供应商管理</td><td>供应商运营</td><td>19</td><td>12</td><td>4</td><td>制度文档分片</td><td>需要审核</td><td><span class="status green">启用</span></td><td>2026-05-22</td><td>2026-06-18</td><td><span class="ops"><a class="link" href="./upload.html">上传文档</a><a class="link" href="./document.html">文档列表</a><a class="link" href="#directory-modal">编辑</a><a class="link">停用</a><a class="link">删除</a></span></td></tr>
+              <tr><td>预算制度 / 年度预算</td><td>预算管理员</td><td>31</td><td>26</td><td>2</td><td>财务制度默认</td><td>继承知识库</td><td><span class="status green">启用</span></td><td>2026-04-10</td><td>2026-06-19</td><td><span class="ops"><a class="link" href="./upload.html">上传文档</a><a class="link" href="./document.html">文档列表</a><a class="link" href="#directory-modal">编辑</a><a class="link">停用</a><a class="link">删除</a></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<section id="directory-modal" class="modal-layer">
+  <a class="modal-mask" href="./directory.html"></a>
+  <div class="modal">
+    <div class="panel-head"><h2>目录配置</h2><span class="status blue">报销制度 / 费用标准</span></div>
+    <div class="panel-body">
+      <div class="form">
+        <div class="field"><label>所属知识库</label><input class="input" value="财务共享知识库"></div>
+        <div class="field"><label>目录路径</label><input class="input" value="报销制度 / 费用标准"></div>
+        <div class="field"><label>目录负责人</label><input class="input" value="财务标准管理员"></div>
+        <div class="field"><label>默认分片配置</label><select class="select"><option>表格文档分片配置</option></select></div>
+        <div class="field"><label>默认审核规则</label><select class="select"><option>需要审核</option></select></div>
+        <div class="field"><label>审核人/组</label><input class="input" value="财务制度审核组"></div>
+      </div>
+      <div class="btns" style="justify-content:flex-end;margin-top:18px;"><a class="btn" href="./directory.html">取消</a><a class="btn primary">保存配置</a></div>
+    </div>
+  </div>
+</section>
+<script src="./studio.js"></script>
+</body>
+</html>
+
+

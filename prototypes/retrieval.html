@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>检索测试</title><link rel="stylesheet" href="./studio.css"></head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="brand-mark">知</span>知识库平台</div>
+    <nav class="nav">
+      <a href="./index.html">首页</a>
+      <a href="./knowledge.html">知识库</a>
+      <a href="./directory.html">目录</a>
+      <a href="./upload.html">文档上传</a>
+      <a href="./document.html">文档处理</a>
+      <a class="active" href="./retrieval.html">检索测试</a>
+      <a href="./publish.html">审核发布</a>
+    </nav>
+  </aside>
+  <main>
+    <header class="top"><div class="crumb">检索测试</div><div>admin</div></header>
+    <section class="main">
+      <div class="title">
+        <div><h1>检索测试</h1><div class="sub">对已完成索引的文档做发布前命中验证，测试通过后进入审核发布。</div></div>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="filter-bar">
+            <select class="select"><option>全部知识库</option><option>财务共享知识库</option></select>
+            <select class="select"><option>全部目录</option><option>报销制度 / 费用标准</option></select>
+            <select class="select"><option>全部测试状态</option><option>待测试</option><option>未通过</option><option>已通过</option></select>
+            <input class="input" value="" placeholder="搜索文档名称">
+            <input class="input" type="date" aria-label="测试时间">
+          </div>
+          <div class="btns"><span class="status amber">待测试 5</span><span class="status red">未通过 2</span><span class="status green">已通过 12</span></div>
+        </div>
+        <div class="panel-body">
+          <table class="table">
+            <thead><tr><th>文档</th><th>知识库</th><th>目录</th><th>版本</th><th>分片</th><th>索引状态</th><th>测试状态</th><th>最近得分</th><th>测试时间</th><th>修改时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr class="active"><td>财务共享报账手册V2.0.docx</td><td>财务共享知识库</td><td>报销制度 / 费用标准</td><td>v2</td><td>128</td><td><span class="status green">已写入</span></td><td><span class="status amber">待测试</span></td><td>-</td><td>-</td><td>2026-06-24 10:06</td><td><span class="ops"><a class="link" href="#test-modal">测试</a><a class="link" href="#record-modal">查看记录</a></span></td></tr>
+              <tr><td>住宿标准.csv</td><td>财务共享知识库</td><td>报销制度 / 费用标准</td><td>v1</td><td>18</td><td><span class="status green">已写入</span></td><td><span class="status red">未通过</span></td><td>0.61</td><td>2026-06-23 16:40</td><td>2026-06-23 16:42</td><td><span class="ops"><a class="link" href="#test-modal">复测</a><a class="link" href="#record-modal">查看记录</a></span></td></tr>
+              <tr><td>交通补贴说明.docx</td><td>财务共享知识库</td><td>报销制度 / 审批流程</td><td>v1</td><td>26</td><td><span class="status green">已写入</span></td><td><span class="status green">已通过</span></td><td>0.88</td><td>2026-06-22 11:18</td><td>2026-06-22 11:19</td><td><span class="ops"><a class="link" href="#record-modal">查看记录</a><a class="link" href="./publish.html">去审核</a></span></td></tr>
+              <tr><td>历史费用标准.pdf</td><td>财务共享知识库</td><td>报销制度 / 费用标准</td><td>v1</td><td>44</td><td><span class="status amber">写入中</span></td><td><span class="status amber">不可测试</span></td><td>-</td><td>-</td><td>2026-06-24 09:28</td><td><span class="ops"><a class="link" href="./document.html">查看处理</a></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<section id="test-modal" class="modal-layer">
+  <a class="modal-mask" href="./retrieval.html"></a>
+  <div class="modal wide">
+    <div class="panel-head"><h2>检索测试</h2><span class="status blue">财务共享报账手册V2.0.docx</span></div>
+    <div class="panel-body">
+      <div class="form">
+        <div class="field"><label>测试范围</label><input class="input" value="当前文档 / 当前目录 / 当前知识库"></div>
+        <div class="field"><label>测试问题</label><input class="input" value="审批通过后进入哪个环节？"></div>
+        <div class="field"><label>TopK</label><select class="select"><option>Top 5</option><option>Top 10</option></select></div>
+      </div>
+      <div class="btns" style="justify-content:flex-end;margin:18px 0;"><a class="btn primary">开始测试</a></div>
+      <table class="table">
+        <thead><tr><th>排名</th><th>命中分片</th><th>所属结构块</th><th>来源章节</th><th>页码</th><th>相似度</th></tr></thead>
+        <tbody><tr class="active"><td>1</td><td>chunk_003</td><td>block_002</td><td>3.2 审批流程</td><td>21-22</td><td>0.92</td></tr><tr><td>2</td><td>chunk_004</td><td>block_002</td><td>3.4 付款处理</td><td>23-24</td><td>0.81</td></tr><tr><td>3</td><td>chunk_016</td><td>block_003</td><td>4.1 财务审核</td><td>36</td><td>0.76</td></tr></tbody>
+      </table>
+      <div class="detail-card" style="margin-top:16px;"><strong>命中内容</strong><br>审批通过后，系统将自动进入财务审核环节。财务审核完成后进入付款处理。</div>
+      <div class="btns" style="justify-content:flex-end;margin-top:18px;"><a class="btn" href="./retrieval.html">关闭</a><a class="btn green">标记通过</a></div>
+    </div>
+  </div>
+</section>
+
+<section id="record-modal" class="modal-layer">
+  <a class="modal-mask" href="./retrieval.html"></a>
+  <div class="modal wide">
+    <div class="panel-head"><h2>测试记录</h2><span class="status green">最近 3 次</span></div>
+    <div class="panel-body">
+      <table class="table">
+        <thead><tr><th>测试时间</th><th>测试问题</th><th>Top1 分片</th><th>得分</th><th>结论</th></tr></thead>
+        <tbody><tr class="active"><td>2026-06-24 10:18</td><td>审批通过后进入哪个环节？</td><td>chunk_003</td><td>0.92</td><td><span class="status green">通过</span></td></tr><tr><td>2026-06-23 16:40</td><td>住宿标准如何判断？</td><td>chunk_021</td><td>0.61</td><td><span class="status red">未通过</span></td></tr></tbody>
+      </table>
+      <div class="btns" style="justify-content:flex-end;margin-top:18px;"><a class="btn" href="./retrieval.html">关闭</a></div>
+    </div>
+  </div>
+</section>
+<script src="./studio.js"></script>
+</body>
+</html>
