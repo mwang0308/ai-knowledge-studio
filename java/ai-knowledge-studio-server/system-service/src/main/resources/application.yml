@@ -5,7 +5,8 @@ spring:
   application:
     name: system-service
   flyway:
-    enabled: false
+    enabled: true
+    validate-on-migrate: false
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/ai_knowledge_studio?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}

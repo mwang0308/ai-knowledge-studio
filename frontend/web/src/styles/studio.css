@@ -32,7 +32,7 @@ input[type="date"] { cursor: pointer; }
 .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 7px; background: var(--blue-soft); color: var(--blue); border: 1px solid #b8cdf0; }
 .nav { display: grid; gap: 6px; }
 .nav a { min-height: 40px; padding: 10px 12px; border-radius: 7px; color: #304861; font-size: 14px; }
-.nav a.router-link-active, .nav a:hover { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
+.nav a.router-link-exact-active, .nav a:hover { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
 
 .top { height: 58px; display: flex; justify-content: space-between; align-items: center; padding: 0 30px; background: rgba(255,255,255,.82); border-bottom: 1px solid var(--line); }
 .crumb { color: var(--muted); font-size: 13px; }
@@ -84,8 +84,16 @@ h3 { font-size: 15px; }
 .link { color: var(--blue); font-weight: 700; cursor: pointer; }
 
 .filter-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; min-width: 620px; }
+.knowledge-panel-head { align-items: flex-start; }
+.knowledge-filter-bar { grid-template-columns: 240px 120px 240px; min-width: 620px; }
+.knowledge-date-picker { width: 240px !important; }
+.knowledge-filter-actions { flex: 0 0 auto; padding-top: 1px; white-space: nowrap; }
+.directory-filter-bar { grid-template-columns: 220px 220px 120px 240px; min-width: 840px; }
+.directory-date-picker { width: 240px !important; }
+.directory-name-cell { display: inline-flex; align-items: center; gap: 8px; }
+.directory-indent { display: inline-block; max-width: 90px; }
 .input, .select, .textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: #172d48; }
-.input, .select { height: 38px; padding: 0 12px; }
+.input, .select { height: 38px; padding: 0 12px; font-size: 13px; line-height: 38px; }
 .textarea { min-height: 92px; padding: 12px; resize: none; }
 .field { display: grid; grid-template-columns: 132px 1fr; gap: 14px; align-items: center; }
 .field label { color: #5b7088; font-size: 13px; }
@@ -128,6 +136,7 @@ h3 { font-size: 15px; }
 .section-gap-bottom { margin-bottom: 18px; }
 .block-gap { margin-top: 16px; }
 .table-gap { margin-top: 18px; }
+.table-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .end-actions { justify-content: flex-end; margin-top: 18px; }
 .amber-text { color: var(--amber) !important; }
 .red-text { color: var(--red) !important; }
