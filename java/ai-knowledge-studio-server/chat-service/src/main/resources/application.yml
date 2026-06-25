@@ -1,0 +1,19 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: chat-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId:-}]"
+
+knife4j:
+  enable: true

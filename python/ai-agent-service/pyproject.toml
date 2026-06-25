@@ -1,0 +1,13 @@
+[project]
+name = "ai-agent-service"
+version = "0.1.0"
+description = "AI 编排服务骨架"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic-settings>=2.4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

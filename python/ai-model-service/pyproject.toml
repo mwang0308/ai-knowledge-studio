@@ -1,0 +1,13 @@
+[project]
+name = "ai-model-service"
+version = "0.1.0"
+description = "模型网关服务骨架"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic-settings>=2.4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

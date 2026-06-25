@@ -1,0 +1,138 @@
+services:
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: nacos
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    volumes:
+      - nacos-data:/home/nacos/data
+
+  mysql:
+    image: mysql:8.4
+    container_name: mysql-latest-lts
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-mwang1234}
+      MYSQL_DATABASE: ai_knowledge_studio
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:latest
+    container_name: my-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-mwang1234}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9900:9900"
+      - "9990:9990"
+    command: server /data --address ":9900" --console-address ":9990"
+    volumes:
+      - minio-data:/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    container_name: aks-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: milvus-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - milvus-etcd-data:/etcd
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: milvus-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - milvus-minio-data:/data
+
+  milvus-standalone:
+    image: milvusdb/milvus:v2.4.0
+    container_name: milvus-standalone
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+      MINIO_ACCESS_KEY_ID: minioadmin
+      MINIO_SECRET_ACCESS_KEY: minioadmin
+    command: milvus run standalone
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+
+  attu:
+    image: zilliz/attu:latest
+    container_name: youthful_bhaskara
+    depends_on:
+      - milvus-standalone
+    environment:
+      MILVUS_URL: milvus-standalone:19530
+    ports:
+      - "8000:3000"
+
+volumes:
+  nacos-data:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:
+  minio-data:
+  milvus-minio-data:
+  es-data:
+  milvus-etcd-data:
+  milvus-data:
