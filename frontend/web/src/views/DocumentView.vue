@@ -1,63 +1,447 @@
 <template>
   <section class="main">
     <div class="title">
-      <div><h1>文档详情 / 结构块与知识分片</h1><div class="sub">结构块是大文件处理单元，知识分片是结构块处理后的检索单元；两者通过 block_id 关联。</div></div>
-      <div class="btns"><RouterLink class="btn" to="/upload">重新上传</RouterLink><button class="btn">重新处理</button><RouterLink class="btn primary" to="/retrieval">检索测试</RouterLink></div>
+      <div>
+        <h1>文档处理</h1>
+        <div class="sub">按文档查看解析状态、文档结构、结构块和分片结果。</div>
+      </div>
+      <div class="btns">
+        <RouterLink class="btn" :to="{ path: '/upload', query: { knowledgeBaseId: query.knowledgeBaseId, directoryId: query.directoryId } }">上传文档</RouterLink>
+        <RouterLink class="btn primary" to="/retrieval">召回测试</RouterLink>
+      </div>
     </div>
 
-    <section class="panel section-gap-bottom">
-      <div class="panel-head"><h2>财务共享报账手册V2.0.docx</h2><div class="btns"><span class="status green">DOCUMENT_EMBEDDING_INDEX 完成</span><span class="status amber">待审核</span><span class="status blue">当前版本 v2</span><span class="status blue">结构块 4 / 分片 128</span></div></div>
+    <section class="panel document-table-panel">
+      <div class="panel-head document-filter-head">
+        <div class="filter-bar document-filter-bar">
+          <input v-model="query.name" class="input" placeholder="搜索文档名称" @keyup.enter="searchDocuments">
+          <select v-model="query.parseStatus" class="select" @change="searchDocuments">
+            <option :value="undefined">全部解析状态</option>
+            <option value="UPLOADED">已上传</option>
+            <option value="PARSE_CHUNKING">解析分片中</option>
+            <option value="PARSE_CHUNKED">解析分片完成</option>
+            <option value="PROCESS_FAILED">处理失败</option>
+          </select>
+          <select v-model="query.publishStatus" class="select" @change="searchDocuments">
+            <option :value="undefined">全部发布状态</option>
+            <option value="UNPUBLISHED">未发布</option>
+            <option value="PUBLISHED">已发布</option>
+            <option value="OFFLINE">已下架</option>
+          </select>
+        </div>
+        <div class="btns">
+          <button class="btn" @click="searchDocuments">查询</button>
+          <span class="status blue">共 {{ total }} 个文档</span>
+        </div>
+      </div>
+      <div class="panel-body document-table-body">
+        <table class="table document-list-table">
+          <thead><tr><th>文档</th><th>解析状态</th><th>审核 / 发布</th><th>分片</th><th>更新时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="item in documents" :key="item.id" :class="{ active: item.id === activeDocument?.id && detailVisible }">
+              <td>
+                <b>{{ item.name }}</b>
+                <div class="muted">{{ item.fileExt }} / v{{ item.currentVersionId || '-' }}</div>
+              </td>
+              <td><span class="status" :class="statusTone(item.parseStatus)">{{ parseStatusText(item.parseStatus) }}</span></td>
+              <td>
+                <span>{{ reviewStatusText(item.reviewStatus) }}</span>
+                <div class="muted">{{ publishStatusText(item.publishStatus) }}</div>
+              </td>
+              <td>{{ item.chunkCount }}</td>
+              <td>{{ formatDate(item.updateTime) }}</td>
+              <td>
+                <div class="ops document-row-ops">
+                  <button class="btn" type="button" @click="openDocumentDetail(item)">分片预览</button>
+                  <RouterLink class="btn" :to="{ path: '/publish', query: { documentId: item.id } }">审核发布</RouterLink>
+                  <button
+                    class="btn"
+                    type="button"
+                    :disabled="item.parseStatus !== 'PROCESS_FAILED'"
+                    title="后端重试处理接口接入后启用"
+                  >
+                    重试处理
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="!documents.length"><td colspan="6">暂无文档</td></tr>
+          </tbody>
+        </table>
+        <div class="table-pagination">
+          <el-pagination
+            v-model:current-page="query.pageNo"
+            v-model:page-size="query.pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="total"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handlePageSizeChange"
+            @current-change="handlePageChange"
+          />
+        </div>
+      </div>
     </section>
 
-    <div class="grid tri">
-      <section class="panel">
-        <div class="panel-head"><h2>文档结构</h2></div>
-        <div class="panel-body"><div class="tree"><div class="tree-title">▼ 1. 总则</div><div class="tree-item">1.1 目的</div><div class="tree-item">1.2 适用范围</div><div class="tree-title">▼ 3. 报销流程</div><div class="tree-item">3.1 报销申请</div><div class="tree-item active">3.2 审批流程</div><div class="tree-item">3.3 财务审核</div><div class="tree-title">▼ 4. 费用标准</div><div class="tree-item">表格：差旅费用标准</div></div></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head"><h2>处理单元与分片产物</h2><div class="view-switch"><button :class="{ 'is-active': activeView === 'blocks' }" @click="activeView = 'blocks'">结构块记录</button><button :class="{ 'is-active': activeView === 'chunks' }" @click="activeView = 'chunks'">知识分片</button></div></div>
-        <div class="panel-body">
-          <div class="relation-note">处理链路：文档解析后先形成结构块 block，再由结构块生成一个或多个 chunk。异常通常先定位到结构块，再查看受影响的分片。</div>
-          <table v-if="activeView === 'blocks'" class="table">
-            <thead><tr><th>结构块</th><th>拆分方式</th><th>来源范围</th><th>状态</th><th>关联分片</th><th>操作</th></tr></thead>
-            <tbody><tr v-for="item in blocks" :key="item.id" :class="{ active: item.active }"><td><a class="link" @click="activeView = 'blocks'">{{ item.id }}</a></td><td>页码范围</td><td>{{ item.range }}</td><td><span class="status" :class="item.tone">{{ item.status }}</span></td><td>{{ item.chunks }}</td><td><a class="link" @click="activeView = item.status === '失败' ? 'blocks' : 'chunks'">{{ item.action }}</a></td></tr></tbody>
-          </table>
-          <table v-else class="table">
-            <thead><tr><th>分片</th><th>所属结构块</th><th>来源章节</th><th>摘要</th><th>Token</th></tr></thead>
-            <tbody><tr v-for="item in chunks" :key="item.id" :class="{ active: item.active }"><td><a class="link" @click="activeView = 'chunks'">{{ item.id }}</a></td><td>{{ item.block }}</td><td>{{ item.chapter }}</td><td>{{ item.summary }}</td><td>{{ item.token }}</td></tr></tbody>
-          </table>
+    <el-dialog
+      v-model="detailVisible"
+      class="document-detail-dialog"
+      width="1320px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="document-dialog-title">
+          <div>
+            <h2>{{ activeDocument?.name || '文档详情' }}</h2>
+            <div class="muted">{{ activeDocument ? `文档 ID ${activeDocument.id} / 当前版本 ${activeDocument.currentVersionId || '-'}` : '-' }}</div>
+          </div>
+          <div v-if="activeDocument" class="btns">
+            <span class="status" :class="statusTone(activeDocument.parseStatus)">{{ parseStatusText(activeDocument.parseStatus) }}</span>
+            <span class="status" :class="activeDocument.publishStatus === 'PUBLISHED' ? 'green' : 'amber'">{{ publishStatusText(activeDocument.publishStatus) }}</span>
+            <RouterLink
+              class="btn primary"
+              :to="{ path: '/retrieval', query: { knowledgeBaseId: activeDocument.knowledgeBaseId, directoryId: activeDocument.directoryId, documentId: activeDocument.id } }"
+            >
+              当前文档召回测试
+            </RouterLink>
+          </div>
         </div>
-      </section>
+      </template>
 
-      <section class="panel">
-        <div class="panel-head"><h2>{{ detail.title }}</h2></div>
-        <div class="panel-body">
-          <table class="kv"><tbody><tr v-for="row in detail.rows" :key="row.label"><td>{{ row.label }}</td><td>{{ row.value }}</td></tr></tbody></table>
-          <div class="chunk-text block-gap">{{ detail.text }}</div>
-          <div class="detail-card block-gap"><strong>版本与任务</strong><br>重新上传相同 file_hash 不生成新版本；修改分片配置后重新处理会生成新版本。</div>
+      <div v-if="activeDocument" class="document-dialog-body">
+        <div class="document-status-strip">
+          <div><label>索引状态</label><strong>{{ indexStatusText(activeDocument.indexStatus) }}</strong></div>
+          <div><label>审核状态</label><strong>{{ reviewStatusText(activeDocument.reviewStatus) }}</strong></div>
+          <div><label>发布状态</label><strong>{{ publishStatusText(activeDocument.publishStatus) }}</strong></div>
+          <div><label>分片数量</label><strong>{{ activeDocument.chunkCount }}</strong></div>
         </div>
-      </section>
-    </div>
+
+        <div class="structure-workspace dialog-structure-workspace">
+          <section class="structure-tree-panel">
+            <div class="subsection-head">文档结构</div>
+            <div class="structure-tree dialog-structure-tree">
+              <button
+                v-for="node in flatStructureTree"
+                :key="node.path"
+                class="tree-node-row"
+                :class="{ active: node.path === activeStructurePath }"
+                :style="{ paddingLeft: `${12 + node.level * 18}px` }"
+                type="button"
+                @click="selectTreeNode(node.path)"
+              >
+                <span>{{ node.name }}</span>
+                <small>{{ node.chunkCount }}</small>
+              </button>
+              <div v-if="!flatStructureTree.length" class="empty-state">暂无文档结构数据。</div>
+            </div>
+          </section>
+
+          <section class="block-chunk-area dialog-block-chunk-area">
+            <div class="subsection-head">
+              <span>结构块与分片</span>
+              <span>{{ activeStructurePath || '-' }}</span>
+            </div>
+            <div v-if="!activeBlocks.length" class="empty-state">当前结构下暂无结构块。</div>
+            <template v-else>
+              <div class="block-section">
+                <div class="section-caption">
+                  <b>结构块</b>
+                  <span>横向滚动查看全部结构块</span>
+                </div>
+                <div class="block-list">
+                  <button
+                    v-for="block in activeBlocks"
+                    :key="block.blockId"
+                    type="button"
+                    class="block-list-item"
+                    :class="{ active: block.blockId === activeBlock?.blockId }"
+                    @click="selectBlock(block)"
+                  >
+                    <b>{{ block.blockId }}</b>
+                    <small>{{ block.chunks.length }} 个分片</small>
+                  </button>
+                </div>
+              </div>
+
+              <div class="chunk-review-workbench">
+                <div class="block-detail dialog-block-detail">
+                  <div class="block-detail-head">
+                    <b><span>当前结构块：</span>{{ activeBlock?.blockId || '-' }}</b>
+                    <span>{{ activeBlock?.chunks.length || 0 }} 个分片</span>
+                  </div>
+                  <table class="table">
+                    <thead><tr><th>分片</th><th>来源章节</th><th>Token</th><th>字符</th><th>页码</th><th>状态</th></tr></thead>
+                    <tbody>
+                      <tr v-for="item in activeBlock?.chunks || []" :key="item.id" :class="{ active: item.id === activeChunk?.id }" @click="activeChunk = item">
+                        <td>{{ item.chunkId }}</td>
+                        <td>{{ normalizeTitlePath(item.titlePath) }}</td>
+                        <td>{{ item.tokenCount }}</td>
+                        <td>{{ item.charCount }}</td>
+                        <td>{{ chunkPageText(item) }}</td>
+                        <td><span class="status" :class="item.enabled ? 'green' : 'amber'">{{ publishStatusText(item.publishStatus) }}</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <section class="chunk-preview-box chunk-preview-side">
+                  <div class="subsection-head">分片内容预览</div>
+                  <div class="chunk-meta" v-if="activeChunk">
+                    <b>{{ activeChunk.chunkId }}</b>
+                    <span>{{ chunkPageText(activeChunk) }} / {{ activeChunk.tokenCount }} Token</span>
+                  </div>
+                  <div class="chunk-text dialog-chunk-text">{{ activeChunk?.contentPreview || '选择分片后查看内容。' }}</div>
+                </section>
+              </div>
+            </template>
+          </section>
+        </div>
+      </div>
+    </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
+import { pageKnowledgeChunk, pageKnowledgeDocument } from '../api/document';
+import type { KnowledgeChunkResponse, KnowledgeDocumentResponse } from '../types/document';
 
-const activeView = ref<'blocks' | 'chunks'>('blocks');
-const blocks = [
-  { id: 'block_001', range: '第 1-20 页', status: '成功', tone: 'green', chunks: 36, action: '看分片' },
-  { id: 'block_002', range: '第 21-40 页', status: '成功', tone: 'green', chunks: 42, action: '看分片', active: true },
-  { id: 'block_003', range: '第 41-60 页', status: '成功', tone: 'green', chunks: 31, action: '看分片' },
-  { id: 'block_004', range: '第 61-80 页', status: '失败', tone: 'red', chunks: 0, action: '重试' },
-];
-const chunks = [
-  { id: 'chunk_003', block: 'block_002', chapter: '3.2 审批流程', summary: '审批通过后进入财务审核...', token: 486, active: true },
-  { id: 'chunk_004', block: 'block_002', chapter: '3.2 审批流程', summary: '审批驳回后补充材料...', token: 398 },
-  { id: 'chunk_005', block: 'block_002', chapter: '4. 费用标准', summary: '表格：城市、岗位、住宿标准...', token: 520 },
-];
-const detail = computed(() => activeView.value === 'blocks'
-  ? { title: '结构块详情', rows: [{ label: '结构块', value: 'block_002' }, { label: '来源范围', value: '第 21-40 页' }, { label: '识别结构', value: '3. 报销流程 / 3.2 审批流程' }, { label: '关联分片', value: 'chunk_003 / chunk_004 / chunk_005' }, { label: '处理状态', value: '成功' }], text: 'block_002 是大文件处理过程中的中间单元，用于定位解析范围和处理异常。它生成多个知识分片，但不会直接进入正式问答检索。' }
-  : { title: '知识分片详情', rows: [{ label: '分片 ID', value: 'chunk_003' }, { label: '所属结构块', value: 'block_002' }, { label: '来源章节', value: '3.2 审批流程' }, { label: '来源页码', value: '第 21-22 页' }, { label: '索引状态', value: 'ES / Milvus 已写入，enabled=false' }], text: '审批通过后，系统将自动进入财务审核环节。财务审核人员需要核对票据真实性、费用标准、审批链路是否完整。' });
+interface StructureNode {
+  titlePath: string;
+  blocks: BlockNode[];
+  chunks: KnowledgeChunkResponse[];
+}
+
+interface BlockNode {
+  blockId: string;
+  chunks: KnowledgeChunkResponse[];
+}
+
+interface TreeNode {
+  name: string;
+  path: string;
+  level: number;
+  chunkCount: number;
+}
+
+const route = useRoute();
+const documents = ref<KnowledgeDocumentResponse[]>([]);
+const chunks = ref<KnowledgeChunkResponse[]>([]);
+const activeDocument = ref<KnowledgeDocumentResponse>();
+const activeStructurePath = ref('');
+const activeBlock = ref<BlockNode>();
+const activeChunk = ref<KnowledgeChunkResponse>();
+const detailVisible = ref(false);
+const total = ref(0);
+const unassignedBlockName = '未归属结构块';
+
+const query = reactive({
+  knowledgeBaseId: Number(route.query.knowledgeBaseId) || undefined,
+  directoryId: Number(route.query.directoryId) || undefined,
+  name: undefined as string | undefined,
+  parseStatus: undefined as string | undefined,
+  publishStatus: undefined as string | undefined,
+  pageNo: 1,
+  pageSize: 10,
+});
+
+const structureNodes = computed<StructureNode[]>(() => {
+  const structureMap = new Map<string, StructureNode>();
+  chunks.value.forEach((chunk) => {
+    const titlePath = normalizeTitlePath(chunk.titlePath);
+    const structure = structureMap.get(titlePath) || { titlePath, blocks: [], chunks: [] };
+    structure.chunks.push(chunk);
+    const blockIds = chunk.blockIds?.length ? chunk.blockIds : [unassignedBlockName];
+    blockIds.forEach((blockId) => {
+      let block = structure.blocks.find((item) => item.blockId === blockId);
+      if (!block) {
+        block = { blockId, chunks: [] };
+        structure.blocks.push(block);
+      }
+      block.chunks.push(chunk);
+    });
+    structureMap.set(titlePath, structure);
+  });
+  return Array.from(structureMap.values());
+});
+const flatStructureTree = computed<TreeNode[]>(() => {
+  const nodeMap = new Map<string, TreeNode>();
+  structureNodes.value.forEach((structure) => {
+    const parts = structure.titlePath.split('/').map((item) => item.trim()).filter(Boolean);
+    parts.forEach((part, index) => {
+      const path = parts.slice(0, index + 1).join(' / ');
+      const current = nodeMap.get(path);
+      if (current) {
+        current.chunkCount += structure.chunks.length;
+      } else {
+        nodeMap.set(path, {
+          name: part,
+          path,
+          level: index,
+          chunkCount: structure.chunks.length,
+        });
+      }
+    });
+  });
+  return Array.from(nodeMap.values());
+});
+const activeChunks = computed(() => {
+  return activeStructurePath.value
+    ? chunks.value.filter((chunk) => normalizeTitlePath(chunk.titlePath).startsWith(activeStructurePath.value))
+    : chunks.value;
+});
+const activeBlocks = computed<BlockNode[]>(() => {
+  const blockMap = new Map<string, BlockNode>();
+  activeChunks.value.forEach((chunk) => {
+    const blockIds = chunk.blockIds?.length ? chunk.blockIds : [unassignedBlockName];
+    blockIds.forEach((blockId) => {
+      const block = blockMap.get(blockId) || { blockId, chunks: [] };
+      block.chunks.push(chunk);
+      blockMap.set(blockId, block);
+    });
+  });
+  return Array.from(blockMap.values());
+});
+
+function normalizeTitlePath(titlePath?: string) {
+  if (!titlePath || titlePath === 'root') {
+    return '未识别结构';
+  }
+  return titlePath.split('/').map((item) => item.trim()).filter(Boolean).join(' / ');
+}
+
+function formatDate(value?: string) {
+  if (!value) {
+    return '-';
+  }
+  return value.replace('T', ' ').slice(0, 19);
+}
+
+function statusTone(status: string) {
+  if (['PARSE_CHUNKED', 'INDEXED', 'AUDIT_PASSED', 'PUBLISHED'].includes(status)) {
+    return 'green';
+  }
+  if (['PROCESS_FAILED', 'INDEX_FAILED', 'AUDIT_REJECTED'].includes(status)) {
+    return 'red';
+  }
+  return 'amber';
+}
+
+function parseStatusText(status: string) {
+  const map: Record<string, string> = {
+    UPLOADED: '已上传',
+    PARSE_CHUNKING: '解析分片中',
+    PARSE_CHUNKED: '解析分片完成',
+    PROCESS_FAILED: '处理失败',
+  };
+  return map[status] || status || '-';
+}
+
+function indexStatusText(status: string) {
+  const map: Record<string, string> = {
+    WAIT_INDEX: '待索引',
+    INDEXING: '索引中',
+    INDEXED: '索引完成',
+    INDEX_FAILED: '索引失败',
+  };
+  return map[status] || status || '-';
+}
+
+function reviewStatusText(status: string) {
+  const map: Record<string, string> = {
+    NOT_SUBMITTED: '未提交审核',
+    WAIT_AUDIT: '待审核',
+    AUDIT_PASSED: '审核通过',
+    AUDIT_REJECTED: '审核驳回',
+  };
+  return map[status] || status || '-';
+}
+
+function publishStatusText(status: string) {
+  const map: Record<string, string> = {
+    UNPUBLISHED: '未发布',
+    PUBLISHING: '发布中',
+    PUBLISHED: '已发布',
+    OFFLINE: '已下架',
+  };
+  return map[status] || status || '-';
+}
+
+function chunkPageText(chunk: KnowledgeChunkResponse) {
+  if (!chunk.pageStart && !chunk.pageEnd) {
+    return '-';
+  }
+  return `${chunk.pageStart || '-'} - ${chunk.pageEnd || '-'}`;
+}
+
+async function loadDocuments() {
+  const result = await pageKnowledgeDocument(query);
+  documents.value = result.data.records;
+  total.value = result.data.total;
+}
+
+function searchDocuments() {
+  query.pageNo = 1;
+  activeDocument.value = undefined;
+  activeStructurePath.value = '';
+  activeBlock.value = undefined;
+  activeChunk.value = undefined;
+  detailVisible.value = false;
+  loadDocuments();
+}
+
+function handlePageSizeChange() {
+  query.pageNo = 1;
+  resetDocumentSelection();
+  loadDocuments();
+}
+
+function handlePageChange() {
+  resetDocumentSelection();
+  loadDocuments();
+}
+
+function resetDocumentSelection() {
+  activeDocument.value = undefined;
+  activeStructurePath.value = '';
+  activeBlock.value = undefined;
+  activeChunk.value = undefined;
+  detailVisible.value = false;
+}
+
+async function openDocumentDetail(document: KnowledgeDocumentResponse) {
+  activeDocument.value = document;
+  activeStructurePath.value = '';
+  activeBlock.value = undefined;
+  activeChunk.value = undefined;
+  detailVisible.value = true;
+  const result = await pageKnowledgeChunk({
+    documentId: document.id,
+    versionId: document.currentVersionId,
+    pageNo: 1,
+    pageSize: 100,
+  });
+  chunks.value = result.data.records;
+  activeStructurePath.value = flatStructureTree.value[0]?.path || '';
+  activeBlock.value = activeBlocks.value[0];
+  activeChunk.value = activeBlock.value?.chunks[0];
+}
+
+function selectTreeNode(path: string) {
+  activeStructurePath.value = path;
+  resetActiveBlock();
+}
+
+function selectBlock(block: BlockNode) {
+  activeBlock.value = block;
+  activeChunk.value = block.chunks[0];
+}
+
+function resetActiveBlock() {
+  activeBlock.value = activeBlocks.value[0];
+  activeChunk.value = activeBlock.value?.chunks[0];
+}
+
+onMounted(loadDocuments);
 </script>

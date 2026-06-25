@@ -1,0 +1,76 @@
+package com.aistudio.system.storage;
+
+import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * 文档对象存储服务，负责把原始文件保存到 MinIO。
+ */
+@Slf4j
+@Component
+public class DocumentStorageService {
+
+    @Resource
+    private MinioClient minioClient;
+
+    @Value("${storage.minio.bucket-name}")
+    private String bucketName;
+
+    /**
+     * 保存原始文件。调用方传入字节数组，避免 multipart 输入流被 hash 计算提前消费。
+     */
+    public String saveOriginalFile(byte[] fileBytes, String fileHash, String fileName, String contentType) {
+        String objectKey = "original/" + fileHash + "/" + fileName;
+        try {
+            ensureBucketExists();
+            minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectKey)
+                    .contentType(contentType)
+                    .stream(new ByteArrayInputStream(fileBytes), fileBytes.length, -1)
+                    .build());
+            log.info("原始文件已上传 MinIO，bucketName={}，objectKey={}，size={}", bucketName, objectKey, fileBytes.length);
+            return objectKey;
+        } catch (Exception exception) {
+            log.error("上传原始文件到 MinIO 失败，bucketName={}，objectKey={}", bucketName, objectKey, exception);
+            throw new IllegalStateException("上传原始文件失败", exception);
+        }
+    }
+
+    public String getBucketName() {
+        return bucketName;
+    }
+
+    /**
+     * 读取文本产物。仅用于读取 Python 归档的结构和分片产物，不读取原文大内容到日志。
+     */
+    public String readTextObject(String bucketName, String objectKey) {
+        try (var inputStream = minioClient.getObject(GetObjectArgs.builder()
+                .bucket(bucketName)
+                .object(objectKey)
+                .build())) {
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            log.error("读取 MinIO 文本产物失败，bucketName={}，objectKey={}", bucketName, objectKey, exception);
+            throw new IllegalStateException("读取处理产物失败", exception);
+        }
+    }
+
+    private void ensureBucketExists() throws Exception {
+        boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
+        if (!exists) {
+            minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
+            log.info("MinIO bucket 不存在，已自动创建，bucketName={}", bucketName);
+        }
+    }
+}

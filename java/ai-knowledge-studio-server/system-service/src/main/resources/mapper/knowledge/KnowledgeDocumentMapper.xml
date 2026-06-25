@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aistudio.system.mapper.IKnowledgeDocumentMapper">
+
+    <select id="countDuplicateFile" resultType="java.lang.Integer">
+        select count(1)
+        from knowledge_document
+        where deleted = 0
+          and knowledge_base_id = #{knowledgeBaseId}
+          and directory_id = #{directoryId}
+          and file_hash = #{fileHash}
+    </select>
+
+    <update id="updateCurrentVersionId">
+        update knowledge_document
+        set current_version_id = #{versionId}
+        where id = #{documentId}
+          and deleted = 0
+    </update>
+
+    <select id="selectDocumentPage" resultType="com.aistudio.system.entity.KnowledgeDocumentDO">
+        select id,
+               knowledge_base_id,
+               directory_id,
+               name,
+               file_resource_id,
+               current_version_id,
+               file_name,
+               file_ext,
+               file_size,
+               file_hash,
+               parse_status,
+               index_status,
+               review_status,
+               publish_status,
+               chunk_count,
+               error_message,
+               create_time,
+               update_time,
+               create_by,
+               update_by,
+               deleted
+        from knowledge_document
+        where deleted = 0
+        <if test="query.knowledgeBaseId != null">
+            and knowledge_base_id = #{query.knowledgeBaseId}
+        </if>
+        <if test="query.directoryId != null">
+            and directory_id = #{query.directoryId}
+        </if>
+        <if test="query.name != null and query.name != ''">
+            and name like concat('%', #{query.name}, '%')
+        </if>
+        <if test="query.parseStatus != null and query.parseStatus != ''">
+            and parse_status = #{query.parseStatus}
+        </if>
+        <if test="query.publishStatus != null and query.publishStatus != ''">
+            and publish_status = #{query.publishStatus}
+        </if>
+        order by update_time desc
+    </select>
+
+    <update id="updateParseSuccess">
+        update knowledge_document
+        set parse_status = 'PARSE_CHUNKED',
+            review_status = 'WAIT_AUDIT',
+            chunk_count = #{chunkCount},
+            error_message = null
+        where id = #{documentId}
+          and current_version_id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="updateParseRunning">
+        update knowledge_document
+        set parse_status = 'PARSE_CHUNKING',
+            error_message = null
+        where id = #{documentId}
+          and current_version_id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="updateParseFailed">
+        update knowledge_document
+        set parse_status = 'PROCESS_FAILED',
+            error_message = #{errorMessage}
+        where id = #{documentId}
+          and current_version_id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="updateIndexSuccess">
+        update knowledge_document
+        set index_status = 'INDEXED'
+        where id = #{documentId}
+          and current_version_id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="updateReviewStatus">
+        update knowledge_document
+        set review_status = #{reviewStatus}
+        where id = #{documentId}
+          and deleted = 0
+    </update>
+
+    <update id="updatePublishStatus">
+        update knowledge_document
+        set publish_status = #{publishStatus}
+        where id = #{documentId}
+          and deleted = 0
+    </update>
+
+    <select id="countByDashboardStatus" resultType="java.lang.Long">
+        select count(1)
+        from knowledge_document
+        where deleted = 0
+        <if test="parseStatus != null and parseStatus != ''">
+            and parse_status = #{parseStatus}
+        </if>
+        <if test="reviewStatus != null and reviewStatus != ''">
+            and review_status = #{reviewStatus}
+        </if>
+        <if test="publishStatus != null and publishStatus != ''">
+            and publish_status = #{publishStatus}
+        </if>
+    </select>
+
+    <select id="sumDashboardChunkCount" resultType="java.lang.Long">
+        select ifnull(sum(chunk_count), 0)
+        from knowledge_document
+        where deleted = 0
+    </select>
+
+    <select id="selectDashboardTodos" resultType="com.aistudio.system.entity.KnowledgeDocumentDO">
+        select *
+        from knowledge_document
+        where deleted = 0
+          and (
+              parse_status = 'PROCESS_FAILED'
+              or review_status = 'WAIT_AUDIT'
+              or review_status = 'AUDIT_PASSED'
+              or parse_status in ('UPLOADED', 'PARSE_CHUNKING')
+          )
+        order by
+          case
+            when parse_status = 'PROCESS_FAILED' then 1
+            when review_status = 'WAIT_AUDIT' then 2
+            when review_status = 'AUDIT_PASSED' then 3
+            else 4
+          end,
+          update_time desc
+        limit #{limitSize}
+    </select>
+
+    <select id="selectDashboardTodoPage" resultType="com.aistudio.system.entity.KnowledgeDocumentDO">
+        select id,
+               knowledge_base_id,
+               directory_id,
+               name,
+               file_resource_id,
+               current_version_id,
+               file_name,
+               file_ext,
+               file_size,
+               file_hash,
+               parse_status,
+               index_status,
+               review_status,
+               publish_status,
+               chunk_count,
+               error_message,
+               create_time,
+               update_time,
+               create_by,
+               update_by,
+               deleted
+        from knowledge_document
+        where deleted = 0
+          and (
+              parse_status = 'PROCESS_FAILED'
+              or review_status = 'WAIT_AUDIT'
+              or review_status = 'AUDIT_PASSED'
+              or parse_status in ('UPLOADED', 'PARSE_CHUNKING')
+          )
+        <if test="query.documentName != null and query.documentName != ''">
+            and name like concat('%', #{query.documentName}, '%')
+        </if>
+        <if test="query.parseStatus != null and query.parseStatus != ''">
+            and parse_status = #{query.parseStatus}
+        </if>
+        <if test="query.reviewStatus != null and query.reviewStatus != ''">
+            and review_status = #{query.reviewStatus}
+        </if>
+        <if test="query.publishStatus != null and query.publishStatus != ''">
+            and publish_status = #{query.publishStatus}
+        </if>
+        <if test="query.createStartTime != null">
+            and create_time &gt;= #{query.createStartTime}
+        </if>
+        <if test="query.createEndTime != null">
+            and create_time &lt;= #{query.createEndTime}
+        </if>
+        order by
+          case
+            when parse_status = 'PROCESS_FAILED' then 1
+            when review_status = 'WAIT_AUDIT' then 2
+            when review_status = 'AUDIT_PASSED' then 3
+            else 4
+          end,
+          update_time desc
+    </select>
+</mapper>

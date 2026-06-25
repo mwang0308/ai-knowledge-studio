@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aistudio.system.mapper.IKnowledgeChunkMapper">
+
+    <select id="selectChunkPage" resultType="com.aistudio.system.entity.KnowledgeChunkDO">
+        select *
+        from knowledge_chunk
+        where deleted = 0
+        <if test="query.knowledgeBaseId != null">
+            and knowledge_base_id = #{query.knowledgeBaseId}
+        </if>
+        <if test="query.directoryId != null">
+            and directory_id = #{query.directoryId}
+        </if>
+        <if test="query.documentId != null">
+            and document_id = #{query.documentId}
+        </if>
+        <if test="query.versionId != null">
+            and document_version_id = #{query.versionId}
+        </if>
+        <if test="query.publishStatus != null and query.publishStatus != ''">
+            and publish_status = #{query.publishStatus}
+        </if>
+        <if test="query.enabled != null">
+            and enabled = #{query.enabled}
+        </if>
+        order by document_id desc, chunk_no asc
+    </select>
+
+    <select id="selectRetrievalCandidates" resultType="com.aistudio.system.entity.KnowledgeChunkDO">
+        select *
+        from knowledge_chunk
+        where deleted = 0
+          and knowledge_base_id = #{query.knowledgeBaseId}
+        <if test="query.directoryId != null">
+            and directory_id = #{query.directoryId}
+        </if>
+        <if test="query.documentId != null">
+            and document_id = #{query.documentId}
+        </if>
+        <if test="query.testScope == 'PUBLISHED'">
+            and publish_status = 'PUBLISHED'
+            and enabled = 1
+        </if>
+        order by update_time desc
+        limit #{query.limitSize}
+    </select>
+
+    <update id="deleteByTaskId">
+        update knowledge_chunk
+        set deleted = 1,
+            enabled = 0
+        where process_task_id = #{taskId}
+          and deleted = 0
+    </update>
+
+    <update id="updatePublishStatus">
+        update knowledge_chunk
+        set publish_status = #{publishStatus},
+            enabled = #{enabled}
+        where document_id = #{documentId}
+          and document_version_id = #{versionId}
+          and deleted = 0
+    </update>
+</mapper>

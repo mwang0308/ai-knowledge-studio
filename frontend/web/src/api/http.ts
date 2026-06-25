@@ -7,7 +7,14 @@ export const http = axios.create({
 });
 
 http.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    const body = response.data;
+    if (body && typeof body === 'object' && 'code' in body && body.code !== '000000') {
+      ElMessage.error(body.message || '请求失败，请稍后重试');
+      return Promise.reject(body);
+    }
+    return body;
+  },
   (error) => {
     const message = error?.response?.data?.message || '请求失败，请稍后重试';
     ElMessage.error(message);

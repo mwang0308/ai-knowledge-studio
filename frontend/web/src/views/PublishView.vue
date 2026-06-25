@@ -1,32 +1,156 @@
 <template>
   <section class="main">
-    <div class="title"><div><h1>审核发布</h1><div class="sub">只处理已完成文档处理和检索测试的发布审核；测试未通过的文档需要先回到检索测试。</div></div></div>
+    <div class="title">
+      <div>
+        <h1>审核发布</h1>
+        <div class="sub">审核通过后才能发布；发布会启用当前版本分片进入正式检索范围。</div>
+      </div>
+      <div class="btns"><button class="btn" @click="loadDocuments">刷新</button></div>
+    </div>
+
     <section class="panel">
-      <div class="panel-head"><div class="filter-bar"><select class="select"><option>全部知识库</option><option>财务共享知识库</option></select><select class="select"><option>全部目录</option><option>报销制度 / 费用标准</option></select><select class="select"><option>全部审核状态</option><option>待审核</option><option>已驳回</option><option>已通过</option></select><select class="select"><option>全部发布状态</option><option>待发布</option><option>已发布</option><option>已下架</option></select><input class="input" type="date" aria-label="发布时间"></div><div class="btns"><span class="status amber">待审核 18</span><span class="status blue">待发布 6</span><span class="status green">已发布 210</span></div></div>
-      <div class="panel-body"><table class="table"><thead><tr><th>文档</th><th>知识库</th><th>目录</th><th>版本</th><th>处理状态</th><th>检索测试</th><th>测试时间</th><th>审核状态</th><th>发布状态</th><th>发布时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in rows" :key="item.name" :class="{ active: item.active }"><td>{{ item.name }}</td><td>{{ item.kb }}</td><td>{{ item.dir }}</td><td>{{ item.ver }}</td><td><span class="status green">完成</span></td><td><span class="status" :class="item.testTone">{{ item.test }}</span></td><td>{{ item.testTime }}</td><td><span class="status" :class="item.auditTone">{{ item.audit }}</span></td><td><span class="status" :class="item.publishTone">{{ item.publish }}</span></td><td>{{ item.publishTime }}</td><td><span class="ops"><a class="link" @click="reviewVisible = true">{{ item.reviewAction }}</a><a v-if="item.canPublish" class="link" @click="publishVisible = true">发布</a><RouterLink v-if="item.needTest" class="link" to="/retrieval">去测试</RouterLink></span></td></tr></tbody></table></div>
+      <div class="panel-head">
+        <div class="filter-bar">
+          <input v-model="query.name" class="input" placeholder="搜索文档名称" @keyup.enter="loadDocuments">
+          <select v-model="query.publishStatus" class="select" @change="loadDocuments">
+            <option :value="undefined">全部发布状态</option>
+            <option value="UNPUBLISHED">未发布</option>
+            <option value="PUBLISHED">已发布</option>
+            <option value="OFFLINE">已下架</option>
+          </select>
+        </div>
+        <div class="btns"><span class="status blue">共 {{ total }} 个文档</span></div>
+      </div>
+      <div class="panel-body">
+        <table class="table">
+          <thead><tr><th>文档</th><th>版本</th><th>解析</th><th>索引</th><th>审核</th><th>发布</th><th>分片</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="item in documents" :key="item.id" :class="{ active: item.id === activeDocument?.id }" @click="activeDocument = item">
+              <td>{{ item.name }}</td>
+              <td>v{{ item.currentVersionId || '-' }}</td>
+              <td><span class="status" :class="item.parseStatus === 'PARSE_CHUNKED' ? 'green' : 'amber'">{{ item.parseStatus }}</span></td>
+              <td>{{ item.indexStatus }}</td>
+              <td><span class="status" :class="reviewTone(item.reviewStatus)">{{ item.reviewStatus }}</span></td>
+              <td><span class="status" :class="publishTone(item.publishStatus)">{{ item.publishStatus }}</span></td>
+              <td>{{ item.chunkCount }}</td>
+              <td>
+                <span class="ops">
+                  <a class="link" @click.stop="openReview(item)">审核</a>
+                  <a v-if="item.reviewStatus === 'AUDIT_PASSED' && item.publishStatus !== 'PUBLISHED'" class="link" @click.stop="publish(item)">发布</a>
+                  <a v-if="item.publishStatus === 'PUBLISHED'" class="link" @click.stop="offline(item)">下架</a>
+                  <RouterLink class="link" :to="{ path: '/retrieval' }">测试</RouterLink>
+                </span>
+              </td>
+            </tr>
+            <tr v-if="!documents.length"><td colspan="8">暂无已完成处理的文档</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
-    <el-dialog v-model="reviewVisible" title="审核详情" width="860px">
-      <table class="table"><thead><tr><th>检查项</th><th>结果说明</th><th>状态</th></tr></thead><tbody><tr><td>原文版本</td><td>v2，原始文件与处理产物可追溯</td><td><span class="status green">通过</span></td></tr><tr><td>结构完整</td><td>章节、页码、结构块完整</td><td><span class="status green">通过</span></td></tr><tr><td>分片可追溯</td><td>128 个分片均带来源页码与 block_id</td><td><span class="status green">通过</span></td></tr><tr><td>检索测试</td><td>Top1 命中 chunk_003，相似度 0.92</td><td><span class="status green">通过</span></td></tr></tbody></table>
-      <div class="form block-gap"><div class="field"><label>审核意见</label><textarea class="textarea" placeholder="请输入审核意见，驳回时必填。"></textarea></div></div>
-      <template #footer><button class="btn" @click="reviewVisible = false">关闭</button><button class="btn red">驳回</button><button class="btn green" @click="reviewVisible = false">审核通过</button></template>
-    </el-dialog>
-    <el-dialog v-model="publishVisible" title="发布确认" width="620px">
-      <table class="kv"><tbody><tr><td>文档</td><td>财务共享报账手册V2.0.docx</td></tr><tr><td>版本</td><td>v2</td></tr><tr><td>发布范围</td><td>财务共享知识库 / 报销制度 / 费用标准</td></tr><tr><td>索引状态</td><td>ES / Milvus 已写入，enabled=false</td></tr></tbody></table>
-      <div class="detail-card block-gap">发布后该版本分片会启用正式检索，旧版本保持可追溯但不再命中。</div>
-      <template #footer><button class="btn" @click="publishVisible = false">取消</button><button class="btn primary" @click="publishVisible = false">确认发布</button></template>
+
+    <el-dialog v-model="reviewVisible" title="审核文档" width="720px">
+      <table class="kv">
+        <tbody>
+          <tr><td>文档</td><td>{{ activeDocument?.name || '-' }}</td></tr>
+          <tr><td>解析状态</td><td>{{ activeDocument?.parseStatus || '-' }}</td></tr>
+          <tr><td>索引状态</td><td>{{ activeDocument?.indexStatus || '-' }}</td></tr>
+          <tr><td>分片数量</td><td>{{ activeDocument?.chunkCount ?? '-' }}</td></tr>
+        </tbody>
+      </table>
+      <div class="form block-gap"><div class="field"><label>审核意见</label><textarea v-model="reviewComment" class="textarea" placeholder="驳回时建议填写原因"></textarea></div></div>
+      <template #footer>
+        <button class="btn" @click="reviewVisible = false">关闭</button>
+        <button class="btn red" @click="reject">驳回</button>
+        <button class="btn green" @click="pass">审核通过</button>
+      </template>
     </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
+import { ElMessage } from 'element-plus';
+import { offlineDocument, pageKnowledgeDocument, passReview, publishDocument, rejectReview } from '../api/document';
+import type { KnowledgeDocumentResponse } from '../types/document';
 
+const documents = ref<KnowledgeDocumentResponse[]>([]);
+const activeDocument = ref<KnowledgeDocumentResponse>();
+const total = ref(0);
 const reviewVisible = ref(false);
-const publishVisible = ref(false);
-const rows = [
-  { active: true, name: '财务共享报账手册V2.0.docx', kb: '财务共享知识库', dir: '报销制度 / 费用标准', ver: 'v2', test: '通过', testTone: 'green', testTime: '2026-06-24 10:18', audit: '待审核', auditTone: 'amber', publish: '未发布', publishTone: 'amber', publishTime: '-', reviewAction: '审核', canPublish: false, needTest: false },
-  { name: '差旅审批说明.pdf', kb: '财务共享知识库', dir: '报销制度 / 审批流程', ver: 'v1', test: '通过', testTone: 'green', testTime: '2026-06-23 15:12', audit: '已通过', auditTone: 'green', publish: '待发布', publishTone: 'blue', publishTime: '-', reviewAction: '查看', canPublish: true, needTest: false },
-  { name: '住宿标准.csv', kb: '财务共享知识库', dir: '报销制度 / 费用标准', ver: 'v1', test: '未通过', testTone: 'red', testTime: '2026-06-23 16:40', audit: '待处理', auditTone: 'amber', publish: '不可发布', publishTone: 'amber', publishTime: '-', reviewAction: '查看', canPublish: false, needTest: true },
-  { name: '交通补贴说明.docx', kb: '财务共享知识库', dir: '报销制度 / 审批流程', ver: 'v1', test: '通过', testTone: 'green', testTime: '2026-06-22 11:18', audit: '已通过', auditTone: 'green', publish: '已发布', publishTone: 'green', publishTime: '2026-06-22 14:30', reviewAction: '查看', canPublish: false, needTest: false },
-];
+const reviewComment = ref('');
+
+const query = reactive({
+  name: undefined as string | undefined,
+  parseStatus: 'PARSE_CHUNKED',
+  publishStatus: undefined as string | undefined,
+  pageNo: 1,
+  pageSize: 100,
+});
+
+function reviewTone(status: string) {
+  if (status === 'AUDIT_PASSED') {
+    return 'green';
+  }
+  if (status === 'AUDIT_REJECTED') {
+    return 'red';
+  }
+  return 'amber';
+}
+
+function publishTone(status: string) {
+  if (status === 'PUBLISHED') {
+    return 'green';
+  }
+  if (status === 'OFFLINE') {
+    return 'red';
+  }
+  return 'amber';
+}
+
+function openReview(document: KnowledgeDocumentResponse) {
+  activeDocument.value = document;
+  reviewComment.value = '';
+  reviewVisible.value = true;
+}
+
+async function loadDocuments() {
+  const result = await pageKnowledgeDocument(query);
+  documents.value = result.data.records;
+  total.value = result.data.total;
+  activeDocument.value = documents.value[0];
+}
+
+async function pass() {
+  if (!activeDocument.value) {
+    return;
+  }
+  await passReview({ documentId: activeDocument.value.id, reviewComment: reviewComment.value });
+  ElMessage.success('审核已通过');
+  reviewVisible.value = false;
+  await loadDocuments();
+}
+
+async function reject() {
+  if (!activeDocument.value) {
+    return;
+  }
+  await rejectReview({ documentId: activeDocument.value.id, reviewComment: reviewComment.value });
+  ElMessage.success('审核已驳回');
+  reviewVisible.value = false;
+  await loadDocuments();
+}
+
+async function publish(document: KnowledgeDocumentResponse) {
+  await publishDocument({ documentId: document.id });
+  ElMessage.success('文档已发布');
+  await loadDocuments();
+}
+
+async function offline(document: KnowledgeDocumentResponse) {
+  await offlineDocument({ documentId: document.id });
+  ElMessage.success('文档已下架');
+  await loadDocuments();
+}
+
+onMounted(loadDocuments);
 </script>

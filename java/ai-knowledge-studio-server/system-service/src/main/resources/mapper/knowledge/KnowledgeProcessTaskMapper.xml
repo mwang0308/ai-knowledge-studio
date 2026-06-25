@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aistudio.system.mapper.IKnowledgeProcessTaskMapper">
+
+    <update id="updateMqMessageId">
+        update knowledge_process_task
+        set mq_message_id = #{mqMessageId}
+        where id = #{id}
+          and deleted = 0
+    </update>
+
+    <update id="updateRunning">
+        update knowledge_process_task
+        set task_status = 'RUNNING',
+            progress = #{progress},
+            start_time = ifnull(start_time, now()),
+            error_code = null,
+            error_message = null
+        where id = #{id}
+          and deleted = 0
+    </update>
+
+    <update id="updateSuccess">
+        update knowledge_process_task
+        set task_status = 'SUCCESS',
+            progress = #{progress},
+            callback_time = now(),
+            finish_time = now(),
+            error_code = null,
+            error_message = null
+        where id = #{id}
+          and deleted = 0
+    </update>
+
+    <update id="updateFailed">
+        update knowledge_process_task
+        set task_status = 'FAILED',
+            progress = #{progress},
+            callback_time = now(),
+            finish_time = now(),
+            error_code = #{errorCode},
+            error_message = #{errorMessage}
+        where id = #{id}
+          and deleted = 0
+    </update>
+</mapper>

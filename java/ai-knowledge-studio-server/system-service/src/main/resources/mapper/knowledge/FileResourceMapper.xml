@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aistudio.system.mapper.IFileResourceMapper">
+
+    <resultMap id="FileResourceResultMap" type="com.aistudio.system.entity.FileResourceDO">
+        <id column="id" property="id"/>
+        <result column="file_name" property="fileName"/>
+        <result column="file_ext" property="fileExt"/>
+        <result column="file_size" property="fileSize"/>
+        <result column="file_hash" property="fileHash"/>
+        <result column="bucket_name" property="bucketName"/>
+        <result column="object_key" property="objectKey"/>
+        <result column="content_type" property="contentType"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="create_by" property="createBy"/>
+        <result column="update_by" property="updateBy"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <select id="selectByFileHash" resultMap="FileResourceResultMap">
+        select id,
+               file_name,
+               file_ext,
+               file_size,
+               file_hash,
+               bucket_name,
+               object_key,
+               content_type,
+               create_time,
+               update_time,
+               create_by,
+               update_by,
+               deleted
+        from file_resource
+        where deleted = 0
+          and file_hash = #{fileHash}
+        limit 1
+    </select>
+</mapper>

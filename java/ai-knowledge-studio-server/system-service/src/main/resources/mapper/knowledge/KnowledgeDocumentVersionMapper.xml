@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aistudio.system.mapper.IKnowledgeDocumentVersionMapper">
+
+    <update id="updateParseSuccess">
+        update knowledge_document_version
+        set parse_status = 'PARSE_CHUNKED',
+            chunk_count = #{chunkCount},
+            token_count = #{tokenCount},
+            parser_name = #{parserName}
+        where id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="updateParseRunning">
+        update knowledge_document_version
+        set parse_status = 'PARSE_CHUNKING'
+        where id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="updateParseFailed">
+        update knowledge_document_version
+        set parse_status = 'PROCESS_FAILED'
+        where id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="updateIndexSuccess">
+        update knowledge_document_version
+        set index_status = 'INDEXED',
+            embedding_model = #{embeddingModel}
+        where id = #{versionId}
+          and deleted = 0
+    </update>
+</mapper>
