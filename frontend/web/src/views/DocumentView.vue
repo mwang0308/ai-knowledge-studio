@@ -3,7 +3,7 @@
     <div class="title">
       <div>
         <h1>文档处理</h1>
-        <div class="sub">按文档查看解析状态、文档结构、结构块和分片结果。</div>
+        <div class="sub">按文档查看解析状态、文档结构、解析块和分片结果。</div>
       </div>
       <div class="btns">
         <RouterLink class="btn" :to="{ path: '/upload', query: { knowledgeBaseId: query.knowledgeBaseId, directoryId: query.directoryId } }">上传文档</RouterLink>
@@ -57,10 +57,16 @@
                   <button
                     class="btn"
                     type="button"
-                    :disabled="item.parseStatus !== 'PROCESS_FAILED'"
-                    title="后端重试处理接口接入后启用"
+                    :disabled="isProcessing(item)"
+                    @click="confirmReprocess(item)"
                   >
-                    重试处理
+                    重新处理
+                  </button>
+                  <button class="btn" type="button" :disabled="isProcessing(item)" @click="openReuploadDialog(item)">
+                    重新上传
+                  </button>
+                  <button class="btn danger" type="button" @click="confirmDelete(item)">
+                    删除
                   </button>
                 </div>
               </td>
@@ -118,35 +124,47 @@
 
         <div class="structure-workspace dialog-structure-workspace">
           <section class="structure-tree-panel">
-            <div class="subsection-head">文档结构</div>
+            <div class="subsection-head">完整文档结构树</div>
             <div class="structure-tree dialog-structure-tree">
-              <button
-                v-for="node in flatStructureTree"
-                :key="node.path"
-                class="tree-node-row"
-                :class="{ active: node.path === activeStructurePath }"
-                :style="{ paddingLeft: `${12 + node.level * 18}px` }"
-                type="button"
-                @click="selectTreeNode(node.path)"
+              <el-tree
+                v-if="structureTree.length"
+                class="document-outline-tree"
+                :data="structureTree"
+                node-key="key"
+                :props="{ label: 'name', children: 'children' }"
+                :current-node-key="activeStructureNodeKey"
+                :expand-on-click-node="false"
+                :indent="22"
+                default-expand-all
+                highlight-current
+                @node-click="selectStructureNode"
               >
-                <span>{{ node.name }}</span>
-                <small>{{ node.chunkCount }}</small>
-              </button>
-              <div v-if="!flatStructureTree.length" class="empty-state">暂无文档结构数据。</div>
+                <template #default="{ data }">
+                  <span class="document-outline-node" :class="`level-${Math.min(data.level || 1, 6)}`">
+                    <span class="document-outline-level">H{{ data.level || 1 }}</span>
+                    <span class="document-outline-main">
+                      <span class="document-outline-title" :title="data.path">{{ data.name }}</span>
+                      <span v-if="outlinePageText(data)" class="document-outline-page">{{ outlinePageText(data) }}</span>
+                    </span>
+                    <small>{{ data.chunkCount }}</small>
+                  </span>
+                </template>
+              </el-tree>
+              <div v-else class="empty-state">暂无文档结构数据。</div>
             </div>
           </section>
 
           <section class="block-chunk-area dialog-block-chunk-area">
             <div class="subsection-head">
-              <span>结构块与分片</span>
+              <span>解析块与分片</span>
               <span>{{ activeStructurePath || '-' }}</span>
             </div>
-            <div v-if="!activeBlocks.length" class="empty-state">当前结构下暂无结构块。</div>
+            <div v-if="!activeBlocks.length" class="empty-state">当前结构下暂无解析块。</div>
             <template v-else>
               <div class="block-section">
                 <div class="section-caption">
-                  <b>结构块</b>
-                  <span>横向滚动查看全部结构块</span>
+                  <b>解析块</b>
+                  <span>点击解析块查看对应分片</span>
                 </div>
                 <div class="block-list">
                   <button
@@ -157,7 +175,7 @@
                     :class="{ active: block.blockId === activeBlock?.blockId }"
                     @click="selectBlock(block)"
                   >
-                    <b>{{ block.blockId }}</b>
+                    <b>{{ block.blockName }}</b>
                     <small>{{ block.chunks.length }} 个分片</small>
                   </button>
                 </div>
@@ -166,17 +184,17 @@
               <div class="chunk-review-workbench">
                 <div class="block-detail dialog-block-detail">
                   <div class="block-detail-head">
-                    <b><span>当前结构块：</span>{{ activeBlock?.blockId || '-' }}</b>
+                    <b><span>当前解析块：</span>{{ activeBlock?.blockName || '-' }}</b>
                     <span>{{ activeBlock?.chunks.length || 0 }} 个分片</span>
                   </div>
                   <table class="table">
-                    <thead><tr><th>分片</th><th>来源章节</th><th>Token</th><th>字符</th><th>页码</th><th>状态</th></tr></thead>
+                    <thead><tr><th>分片</th><th>来源章节</th><th>来源解析块</th><th>Token</th><th>页码</th><th>状态</th></tr></thead>
                     <tbody>
                       <tr v-for="item in activeBlock?.chunks || []" :key="item.id" :class="{ active: item.id === activeChunk?.id }" @click="activeChunk = item">
                         <td>{{ item.chunkId }}</td>
                         <td>{{ normalizeTitlePath(item.titlePath) }}</td>
+                        <td>{{ chunkParseBlockText(item) }}</td>
                         <td>{{ item.tokenCount }}</td>
-                        <td>{{ item.charCount }}</td>
                         <td>{{ chunkPageText(item) }}</td>
                         <td><span class="status" :class="item.enabled ? 'green' : 'amber'">{{ publishStatusText(item.publishStatus) }}</span></td>
                       </tr>
@@ -198,14 +216,51 @@
         </div>
       </div>
     </el-dialog>
+
+    <el-dialog
+      v-model="reuploadVisible"
+      width="520px"
+      title="重新上传处理"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="reupload-panel">
+        <div class="field">
+          <label>当前文档</label>
+          <div class="readonly-field">{{ reuploadDocument?.name || '-' }}</div>
+        </div>
+        <div class="field">
+          <label>选择新文件</label>
+          <input class="input" type="file" @change="handleReuploadFileChange">
+        </div>
+        <div class="muted">提交后会生成新版本、重新投递解析分片任务，并清空当前审核发布状态。</div>
+      </div>
+      <template #footer>
+        <button class="btn" type="button" @click="reuploadVisible = false">取消</button>
+        <button class="btn primary" type="button" :disabled="!reuploadFile" @click="submitReupload">提交处理</button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { pageKnowledgeChunk, pageKnowledgeDocument } from '../api/document';
-import type { KnowledgeChunkResponse, KnowledgeDocumentResponse } from '../types/document';
+import {
+  deleteKnowledgeDocument,
+  getKnowledgeDocumentStructure,
+  pageKnowledgeChunk,
+  pageKnowledgeDocument,
+  reprocessKnowledgeDocument,
+  reuploadKnowledgeDocument,
+} from '../api/document';
+import type {
+  KnowledgeChunkResponse,
+  KnowledgeDocumentResponse,
+  KnowledgeDocumentStructureNode,
+  KnowledgeDocumentStructureResponse,
+} from '../types/document';
 
 interface StructureNode {
   titlePath: string;
@@ -215,26 +270,36 @@ interface StructureNode {
 
 interface BlockNode {
   blockId: string;
+  blockName: string;
   chunks: KnowledgeChunkResponse[];
 }
 
 interface TreeNode {
+  sectionId?: string;
+  key: string;
   name: string;
   path: string;
   level: number;
+  pageStart?: number;
+  pageEnd?: number;
   chunkCount: number;
+  children: TreeNode[];
 }
 
 const route = useRoute();
 const documents = ref<KnowledgeDocumentResponse[]>([]);
 const chunks = ref<KnowledgeChunkResponse[]>([]);
+const documentStructure = ref<KnowledgeDocumentStructureResponse>();
 const activeDocument = ref<KnowledgeDocumentResponse>();
 const activeStructurePath = ref('');
 const activeBlock = ref<BlockNode>();
 const activeChunk = ref<KnowledgeChunkResponse>();
 const detailVisible = ref(false);
+const reuploadVisible = ref(false);
+const reuploadDocument = ref<KnowledgeDocumentResponse>();
+const reuploadFile = ref<File>();
 const total = ref(0);
-const unassignedBlockName = '未归属结构块';
+const unassignedBlockName = '未归属解析块';
 
 const query = reactive({
   knowledgeBaseId: Number(route.query.knowledgeBaseId) || undefined,
@@ -252,57 +317,150 @@ const structureNodes = computed<StructureNode[]>(() => {
     const titlePath = normalizeTitlePath(chunk.titlePath);
     const structure = structureMap.get(titlePath) || { titlePath, blocks: [], chunks: [] };
     structure.chunks.push(chunk);
-    const blockIds = chunk.blockIds?.length ? chunk.blockIds : [unassignedBlockName];
+    const blockIds = chunk.parseBlockId ? [chunk.parseBlockId] : (chunk.blockIds?.length ? chunk.blockIds : [unassignedBlockName]);
     blockIds.forEach((blockId) => {
       let block = structure.blocks.find((item) => item.blockId === blockId);
       if (!block) {
-        block = { blockId, chunks: [] };
+        block = { blockId, blockName: blockDisplayName(chunk, blockId), chunks: [] };
         structure.blocks.push(block);
       }
-      block.chunks.push(chunk);
+      if (!block.chunks.some((item) => item.chunkId === chunk.chunkId)) {
+        block.chunks.push(chunk);
+      }
     });
     structureMap.set(titlePath, structure);
   });
   return Array.from(structureMap.values());
 });
-const flatStructureTree = computed<TreeNode[]>(() => {
+const structureTree = computed<TreeNode[]>(() => {
+  if (documentStructure.value?.directoryTree?.length) {
+    const apiTree = mapStructureTree(documentStructure.value.directoryTree);
+    if (apiTree.some(hasChildNode)) return ensureDocumentRoot(apiTree);
+    return ensureDocumentRoot(buildPathTree(flattenApiStructure(documentStructure.value.directoryTree)));
+  }
+  return ensureDocumentRoot(buildPathTree(structureNodes.value.map((item) => ({ path: item.titlePath, name: item.titlePath }))));
+});
+const activeStructureNodeKey = computed(() => activeStructurePath.value || '__document_root__');
+
+function mapStructureTree(nodes: KnowledgeDocumentStructureNode[]): TreeNode[] {
+  return nodes.map((node) => ({
+    sectionId: node.sectionId,
+    key: normalizeTitlePath(node.titlePath),
+    name: node.title,
+    path: normalizeTitlePath(node.titlePath),
+    level: node.level,
+    pageStart: node.pageStart,
+    pageEnd: node.pageEnd,
+    chunkCount: countChunksByPath(node.titlePath),
+    children: mapStructureTree(node.children || []),
+  }));
+}
+
+function hasChildNode(node: TreeNode): boolean {
+  return node.children.length > 0 || node.children.some(hasChildNode);
+}
+
+function flattenApiStructure(nodes: KnowledgeDocumentStructureNode[]): Array<{ sectionId?: string; path: string; name: string; level?: number; pageStart?: number; pageEnd?: number }> {
+  return nodes.flatMap((node) => [
+    {
+      sectionId: node.sectionId,
+      path: normalizeTitlePath(node.titlePath),
+      name: node.title,
+      level: node.level,
+      pageStart: node.pageStart,
+      pageEnd: node.pageEnd,
+    },
+    ...flattenApiStructure(node.children || []),
+  ]);
+}
+
+function buildPathTree(items: Array<{ sectionId?: string; path: string; name: string; level?: number; pageStart?: number; pageEnd?: number }>): TreeNode[] {
+  const roots: TreeNode[] = [];
   const nodeMap = new Map<string, TreeNode>();
-  structureNodes.value.forEach((structure) => {
-    const parts = structure.titlePath.split('/').map((item) => item.trim()).filter(Boolean);
+  items.forEach((item) => {
+    const normalizedPath = normalizeTitlePath(item.path);
+    const parts = normalizedPath.split('/').map((part) => part.trim()).filter(Boolean);
     parts.forEach((part, index) => {
       const path = parts.slice(0, index + 1).join(' / ');
-      const current = nodeMap.get(path);
-      if (current) {
-        current.chunkCount += structure.chunks.length;
-      } else {
-        nodeMap.set(path, {
-          name: part,
-          path,
-          level: index,
-          chunkCount: structure.chunks.length,
-        });
+      let node = nodeMap.get(path);
+      if (!node) {
+        node = { key: path, name: part, path, level: index + 1, chunkCount: countChunksByPath(path), children: [] };
+        nodeMap.set(path, node);
+        if (index === 0) roots.push(node);
+        else nodeMap.get(parts.slice(0, index).join(' / '))?.children.push(node);
+      }
+      if (index === parts.length - 1) {
+        node.sectionId = item.sectionId;
+        node.name = item.name || part;
+        node.level = item.level || index + 1;
+        node.pageStart = item.pageStart;
+        node.pageEnd = item.pageEnd;
       }
     });
   });
-  return Array.from(nodeMap.values());
-});
+  return roots;
+}
+
+function ensureDocumentRoot(nodes: TreeNode[]): TreeNode[] {
+  if (nodes.length <= 1) return nodes;
+  return [{
+    key: '__document_root__',
+    name: activeDocument.value?.name || '文档目录',
+    path: '',
+    level: 1,
+    chunkCount: chunks.value.length,
+    children: nodes,
+  }];
+}
 const activeChunks = computed(() => {
   return activeStructurePath.value
     ? chunks.value.filter((chunk) => normalizeTitlePath(chunk.titlePath).startsWith(activeStructurePath.value))
     : chunks.value;
 });
+
 const activeBlocks = computed<BlockNode[]>(() => {
   const blockMap = new Map<string, BlockNode>();
   activeChunks.value.forEach((chunk) => {
-    const blockIds = chunk.blockIds?.length ? chunk.blockIds : [unassignedBlockName];
+    const blockIds = chunk.parseBlockId ? [chunk.parseBlockId] : (chunk.blockIds?.length ? chunk.blockIds : [unassignedBlockName]);
     blockIds.forEach((blockId) => {
-      const block = blockMap.get(blockId) || { blockId, chunks: [] };
-      block.chunks.push(chunk);
+      const block = blockMap.get(blockId) || { blockId, blockName: blockDisplayName(chunk, blockId), chunks: [] };
+      if (!block.chunks.some((item) => item.chunkId === chunk.chunkId)) {
+        block.chunks.push(chunk);
+      }
       blockMap.set(blockId, block);
     });
   });
   return Array.from(blockMap.values());
 });
+
+function countChunksByPath(titlePath?: string) {
+  const normalized = normalizeTitlePath(titlePath);
+  return chunks.value.filter((chunk) => normalizeTitlePath(chunk.titlePath).startsWith(normalized)).length;
+}
+
+function blockDisplayName(chunk: KnowledgeChunkResponse, fallback: string) {
+  if (chunk.parseBlockName) {
+    return chunk.parseBlockName;
+  }
+  if (chunk.blockNames?.length) {
+    return chunk.blockNames.join('，');
+  }
+  return fallback;
+}
+
+function chunkParseBlockText(chunk: KnowledgeChunkResponse) {
+  return chunk.parseBlockName || chunk.blockNames?.join('，') || '-';
+}
+
+function outlinePageText(node: TreeNode) {
+  if (!node.pageStart && !node.pageEnd) {
+    return '';
+  }
+  if (node.pageStart && node.pageEnd && node.pageStart !== node.pageEnd) {
+    return `第 ${node.pageStart}-${node.pageEnd} 页`;
+  }
+  return `第 ${node.pageStart || node.pageEnd} 页`;
+}
 
 function normalizeTitlePath(titlePath?: string) {
   if (!titlePath || titlePath === 'root') {
@@ -375,6 +533,10 @@ function chunkPageText(chunk: KnowledgeChunkResponse) {
   return `${chunk.pageStart || '-'} - ${chunk.pageEnd || '-'}`;
 }
 
+function isProcessing(document: KnowledgeDocumentResponse) {
+  return document.parseStatus === 'PARSE_CHUNKING';
+}
+
 async function loadDocuments() {
   const result = await pageKnowledgeDocument(query);
   documents.value = result.data.records;
@@ -384,6 +546,7 @@ async function loadDocuments() {
 function searchDocuments() {
   query.pageNo = 1;
   activeDocument.value = undefined;
+  documentStructure.value = undefined;
   activeStructurePath.value = '';
   activeBlock.value = undefined;
   activeChunk.value = undefined;
@@ -404,6 +567,7 @@ function handlePageChange() {
 
 function resetDocumentSelection() {
   activeDocument.value = undefined;
+  documentStructure.value = undefined;
   activeStructurePath.value = '';
   activeBlock.value = undefined;
   activeChunk.value = undefined;
@@ -412,24 +576,90 @@ function resetDocumentSelection() {
 
 async function openDocumentDetail(document: KnowledgeDocumentResponse) {
   activeDocument.value = document;
+  documentStructure.value = undefined;
   activeStructurePath.value = '';
   activeBlock.value = undefined;
   activeChunk.value = undefined;
   detailVisible.value = true;
-  const result = await pageKnowledgeChunk({
-    documentId: document.id,
-    versionId: document.currentVersionId,
-    pageNo: 1,
-    pageSize: 100,
-  });
-  chunks.value = result.data.records;
-  activeStructurePath.value = flatStructureTree.value[0]?.path || '';
-  activeBlock.value = activeBlocks.value[0];
-  activeChunk.value = activeBlock.value?.chunks[0];
+  const [structureResult, chunkRecords] = await Promise.all([
+    getKnowledgeDocumentStructure(document.id),
+    loadAllDocumentChunks(document),
+  ]);
+  documentStructure.value = structureResult.data;
+  chunks.value = chunkRecords;
+  activeStructurePath.value = structureTree.value[0]?.path || '';
+  resetActiveBlock();
 }
 
-function selectTreeNode(path: string) {
-  activeStructurePath.value = path;
+async function confirmReprocess(document: KnowledgeDocumentResponse) {
+  await ElMessageBox.confirm(`确认重新处理“${document.name}”？当前版本已有分片会被清空并重新生成。`, '重新处理', {
+    confirmButtonText: '确认处理',
+    cancelButtonText: '取消',
+    type: 'warning',
+  });
+  const result = await reprocessKnowledgeDocument(document.id);
+  ElMessage.success(`已提交重新处理任务：${result.data.taskNo}`);
+  resetDocumentSelection();
+  await loadDocuments();
+}
+
+function openReuploadDialog(document: KnowledgeDocumentResponse) {
+  reuploadDocument.value = document;
+  reuploadFile.value = undefined;
+  reuploadVisible.value = true;
+}
+
+function handleReuploadFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  reuploadFile.value = input.files?.[0];
+}
+
+async function submitReupload() {
+  if (!reuploadDocument.value || !reuploadFile.value) {
+    return;
+  }
+  const data = new FormData();
+  data.append('file', reuploadFile.value);
+  const result = await reuploadKnowledgeDocument(reuploadDocument.value.id, data);
+  ElMessage.success(`已提交重新上传处理任务：${result.data.taskNo}`);
+  reuploadVisible.value = false;
+  resetDocumentSelection();
+  await loadDocuments();
+}
+
+async function confirmDelete(document: KnowledgeDocumentResponse) {
+  await ElMessageBox.confirm(`确认删除“${document.name}”？原文、解析产物、分片和治理记录会同步清理。`, '删除文档', {
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
+    type: 'warning',
+  });
+  await deleteKnowledgeDocument(document.id);
+  ElMessage.success('文档已删除');
+  resetDocumentSelection();
+  await loadDocuments();
+}
+
+async function loadAllDocumentChunks(document: KnowledgeDocumentResponse) {
+  const pageSize = 100;
+  const records: KnowledgeChunkResponse[] = [];
+  let pageNo = 1;
+  let totalRecords = 0;
+  do {
+    const result = await pageKnowledgeChunk({
+      documentId: document.id,
+      versionId: document.currentVersionId,
+      pageNo,
+      pageSize,
+    });
+    records.push(...result.data.records);
+    totalRecords = result.data.total;
+    pageNo += 1;
+  } while (records.length < totalRecords);
+  return records;
+}
+
+function selectStructureNode(node: TreeNode) {
+  activeStructurePath.value = node.path;
   resetActiveBlock();
 }
 

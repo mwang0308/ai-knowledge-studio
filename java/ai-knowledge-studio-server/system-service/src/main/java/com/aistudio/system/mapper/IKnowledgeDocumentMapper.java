@@ -27,6 +27,8 @@ public interface IKnowledgeDocumentMapper extends BaseMapper<KnowledgeDocumentDO
                                @Param("directoryId") Long directoryId,
                                @Param("fileHash") String fileHash);
 
+    KnowledgeDocumentDO selectByDocumentUid(@Param("documentUid") String documentUid);
+
     /**
      * 更新文档当前版本 ID。
      *
@@ -72,6 +74,17 @@ public interface IKnowledgeDocumentMapper extends BaseMapper<KnowledgeDocumentDO
 
     int updatePublishStatus(@Param("documentId") Long documentId,
                             @Param("publishStatus") String publishStatus);
+
+    int updateForNewVersion(@Param("documentId") Long documentId,
+                            @Param("fileResourceId") Long fileResourceId,
+                            @Param("versionId") Long versionId,
+                            @Param("name") String name,
+                            @Param("fileName") String fileName,
+                            @Param("fileExt") String fileExt,
+                            @Param("fileSize") Long fileSize,
+                            @Param("fileHash") String fileHash);
+
+    int softDeleteById(@Param("documentId") Long documentId);
 
     Long countByDashboardStatus(@Param("parseStatus") String parseStatus,
                                 @Param("reviewStatus") String reviewStatus,

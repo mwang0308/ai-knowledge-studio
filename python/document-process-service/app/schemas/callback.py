@@ -18,8 +18,8 @@ class CallbackResult(BaseModel):
 class ProcessCallback(BaseModel):
     """回调 system-service 的文档处理状态。"""
 
-    taskId: int
-    documentId: int
+    taskId: str
+    documentId: str
     stageCode: str
     status: str
     progress: int

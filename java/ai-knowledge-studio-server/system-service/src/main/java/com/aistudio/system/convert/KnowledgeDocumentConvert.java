@@ -51,8 +51,9 @@ public class KnowledgeDocumentConvert {
     }
 
     public KnowledgeDocumentDO toDocumentDO(Long knowledgeBaseId, Long directoryId, String documentName,
-                                            FileResourceDO fileResourceDO) {
+                                            FileResourceDO fileResourceDO, String documentUid) {
         return KnowledgeDocumentDO.builder()
+                .documentUid(documentUid)
                 .knowledgeBaseId(knowledgeBaseId)
                 .directoryId(directoryId)
                 .name(documentName)
@@ -71,8 +72,9 @@ public class KnowledgeDocumentConvert {
     }
 
     public KnowledgeDocumentVersionDO toVersionDO(Long documentId, Integer versionNo, FileResourceDO fileResourceDO,
-                                                  String chunkConfigSnapshot) {
+                                                  String chunkConfigSnapshot, String versionUid) {
         return KnowledgeDocumentVersionDO.builder()
+                .versionUid(versionUid)
                 .documentId(documentId)
                 .versionNo(versionNo)
                 .fileResourceId(fileResourceDO.getId())
@@ -86,9 +88,10 @@ public class KnowledgeDocumentConvert {
                 .build();
     }
 
-    public KnowledgeProcessTaskDO toProcessTaskDO(String taskNo, Long knowledgeBaseId, Long directoryId,
+    public KnowledgeProcessTaskDO toProcessTaskDO(String taskUid, String taskNo, Long knowledgeBaseId, Long directoryId,
                                                   Long documentId, Long versionId) {
         return KnowledgeProcessTaskDO.builder()
+                .taskUid(taskUid)
                 .taskNo(taskNo)
                 .knowledgeBaseId(knowledgeBaseId)
                 .directoryId(directoryId)
@@ -108,9 +111,9 @@ public class KnowledgeDocumentConvert {
                                                             KnowledgeProcessTaskDO taskDO) {
         return KnowledgeDocumentUploadResponse.builder()
                 .fileResourceId(fileResourceDO.getId())
-                .documentId(documentDO.getId())
-                .versionId(versionDO.getId())
-                .taskId(taskDO.getId())
+                .documentId(documentDO.getDocumentUid())
+                .versionId(versionDO.getVersionUid())
+                .taskId(taskDO.getTaskUid())
                 .taskNo(taskDO.getTaskNo())
                 .mqMessageId(taskDO.getMqMessageId())
                 .fileHash(fileResourceDO.getFileHash())
@@ -133,11 +136,11 @@ public class KnowledgeDocumentConvert {
 
     public KnowledgeDocumentResponse toResponse(KnowledgeDocumentDO documentDO) {
         return KnowledgeDocumentResponse.builder()
-                .id(documentDO.getId())
+                .id(documentDO.getDocumentUid())
                 .knowledgeBaseId(documentDO.getKnowledgeBaseId())
                 .directoryId(documentDO.getDirectoryId())
                 .name(documentDO.getName())
-                .currentVersionId(documentDO.getCurrentVersionId())
+                .currentVersionId(documentDO.getCurrentVersionUid())
                 .fileName(documentDO.getFileName())
                 .fileExt(documentDO.getFileExt())
                 .fileSize(documentDO.getFileSize())
@@ -154,10 +157,10 @@ public class KnowledgeDocumentConvert {
 
     public KnowledgeTaskProgressResponse toTaskProgressResponse(KnowledgeProcessTaskDO taskDO) {
         return KnowledgeTaskProgressResponse.builder()
-                .taskId(taskDO.getId())
+                .taskId(taskDO.getTaskUid())
                 .taskNo(taskDO.getTaskNo())
-                .documentId(taskDO.getDocumentId())
-                .versionId(taskDO.getDocumentVersionId())
+                .documentId(null)
+                .versionId(null)
                 .stageCode(taskDO.getStageCode())
                 .taskStatus(taskDO.getTaskStatus())
                 .progress(taskDO.getProgress())
@@ -188,8 +191,8 @@ public class KnowledgeDocumentConvert {
                 .chunkId(chunkDO.getChunkId())
                 .knowledgeBaseId(chunkDO.getKnowledgeBaseId())
                 .directoryId(chunkDO.getDirectoryId())
-                .documentId(chunkDO.getDocumentId())
-                .documentVersionId(chunkDO.getDocumentVersionId())
+                .documentId(chunkDO.getDocumentUid())
+                .documentVersionId(chunkDO.getDocumentVersionUid())
                 .chunkNo(chunkDO.getChunkNo())
                 .titlePath(chunkDO.getTitlePath())
                 .contentPreview(chunkDO.getContentPreview())
@@ -197,7 +200,10 @@ public class KnowledgeDocumentConvert {
                 .charCount(chunkDO.getCharCount())
                 .pageStart(chunkDO.getPageStart())
                 .pageEnd(chunkDO.getPageEnd())
-                .blockIds(parseBlockIds(chunkDO.getMetadataJson()))
+                .blockIds(parseStringArray(chunkDO.getMetadataJson(), "block_ids"))
+                .blockNames(parseStringArray(chunkDO.getMetadataJson(), "block_names"))
+                .parseBlockId(parseText(chunkDO.getMetadataJson(), "parse_block_id"))
+                .parseBlockName(parseText(chunkDO.getMetadataJson(), "parse_block_name"))
                 .publishStatus(chunkDO.getPublishStatus())
                 .enabled(chunkDO.getEnabled())
                 .createTime(chunkDO.getCreateTime())
@@ -205,19 +211,34 @@ public class KnowledgeDocumentConvert {
                 .build();
     }
 
-    private List<String> parseBlockIds(String metadataJson) {
-        List<String> blockIds = new ArrayList<>();
+    private List<String> parseStringArray(String metadataJson, String fieldName) {
+        List<String> values = new ArrayList<>();
         if (metadataJson == null || metadataJson.isBlank()) {
-            return blockIds;
+            return values;
         }
         try {
-            JsonNode blockNode = objectMapper.readTree(metadataJson).get("block_ids");
-            if (blockNode != null && blockNode.isArray()) {
-                blockNode.forEach(item -> blockIds.add(item.asText()));
+            JsonNode rootNode = objectMapper.readTree(metadataJson);
+            JsonNode valueNode = rootNode.get(fieldName);
+            if (valueNode != null && valueNode.isArray()) {
+                valueNode.forEach(item -> values.add(item.asText()));
             }
         } catch (Exception ignored) {
-            return blockIds;
+            return values;
         }
-        return blockIds;
+        return values;
     }
+
+    private String parseText(String metadataJson, String fieldName) {
+        if (metadataJson == null || metadataJson.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode rootNode = objectMapper.readTree(metadataJson);
+            JsonNode valueNode = rootNode.get(fieldName);
+            return valueNode == null || valueNode.isNull() ? null : valueNode.asText();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
 }

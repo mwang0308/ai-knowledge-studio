@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aistudio.system.mapper.IKnowledgeDocumentParseBlockMapper">
+
+    <select id="selectByDocumentVersion" resultType="com.aistudio.system.entity.KnowledgeDocumentParseBlockDO">
+        select *
+        from knowledge_document_parse_block
+        where document_id = #{documentId}
+          and document_version_id = #{versionId}
+          and deleted = 0
+        order by sort_order asc, id asc
+    </select>
+
+    <update id="deleteByDocumentVersion">
+        update knowledge_document_parse_block
+        set deleted = 1
+        where document_id = #{documentId}
+          and document_version_id = #{versionId}
+          and deleted = 0
+    </update>
+
+    <update id="deleteByDocumentId">
+        update knowledge_document_parse_block
+        set deleted = 1
+        where document_id = #{documentId}
+          and deleted = 0
+    </update>
+</mapper>

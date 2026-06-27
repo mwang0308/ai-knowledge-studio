@@ -12,6 +12,14 @@
           and file_hash = #{fileHash}
     </select>
 
+    <select id="selectByDocumentUid" resultType="com.aistudio.system.entity.KnowledgeDocumentDO">
+        select *
+        from knowledge_document
+        where document_uid = #{documentUid}
+          and deleted = 0
+        limit 1
+    </select>
+
     <update id="updateCurrentVersionId">
         update knowledge_document
         set current_version_id = #{versionId}
@@ -21,11 +29,13 @@
 
     <select id="selectDocumentPage" resultType="com.aistudio.system.entity.KnowledgeDocumentDO">
         select id,
+               document_uid,
                knowledge_base_id,
                directory_id,
                name,
                file_resource_id,
                current_version_id,
+               (select version_uid from knowledge_document_version where id = knowledge_document.current_version_id) as current_version_uid,
                file_name,
                file_ext,
                file_size,
@@ -112,6 +122,32 @@
           and deleted = 0
     </update>
 
+    <update id="updateForNewVersion">
+        update knowledge_document
+        set file_resource_id = #{fileResourceId},
+            current_version_id = #{versionId},
+            name = #{name},
+            file_name = #{fileName},
+            file_ext = #{fileExt},
+            file_size = #{fileSize},
+            file_hash = #{fileHash},
+            parse_status = 'UPLOADED',
+            index_status = 'WAIT_INDEX',
+            review_status = 'NOT_SUBMITTED',
+            publish_status = 'UNPUBLISHED',
+            chunk_count = 0,
+            error_message = null
+        where id = #{documentId}
+          and deleted = 0
+    </update>
+
+    <update id="softDeleteById">
+        update knowledge_document
+        set deleted = 1
+        where id = #{documentId}
+          and deleted = 0
+    </update>
+
     <select id="countByDashboardStatus" resultType="java.lang.Long">
         select count(1)
         from knowledge_document
@@ -156,11 +192,13 @@
 
     <select id="selectDashboardTodoPage" resultType="com.aistudio.system.entity.KnowledgeDocumentDO">
         select id,
+               document_uid,
                knowledge_base_id,
                directory_id,
                name,
                file_resource_id,
                current_version_id,
+               (select version_uid from knowledge_document_version where id = knowledge_document.current_version_id) as current_version_uid,
                file_name,
                file_ext,
                file_size,

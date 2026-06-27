@@ -14,10 +14,10 @@
             and directory_id = #{query.directoryId}
         </if>
         <if test="query.documentId != null">
-            and document_id = #{query.documentId}
+            and document_uid = #{query.documentId}
         </if>
         <if test="query.versionId != null">
-            and document_version_id = #{query.versionId}
+            and document_version_uid = #{query.versionId}
         </if>
         <if test="query.publishStatus != null and query.publishStatus != ''">
             and publish_status = #{query.publishStatus}
@@ -37,7 +37,7 @@
             and directory_id = #{query.directoryId}
         </if>
         <if test="query.documentId != null">
-            and document_id = #{query.documentId}
+            and document_uid = #{query.documentId}
         </if>
         <if test="query.testScope == 'PUBLISHED'">
             and publish_status = 'PUBLISHED'
@@ -52,6 +52,23 @@
         set deleted = 1,
             enabled = 0
         where process_task_id = #{taskId}
+          and deleted = 0
+    </update>
+
+    <update id="deleteByDocumentId">
+        update knowledge_chunk
+        set deleted = 1,
+            enabled = 0
+        where document_id = #{documentId}
+          and deleted = 0
+    </update>
+
+    <update id="deleteByDocumentVersion">
+        update knowledge_chunk
+        set deleted = 1,
+            enabled = 0
+        where document_id = #{documentId}
+          and document_version_id = #{versionId}
           and deleted = 0
     </update>
 

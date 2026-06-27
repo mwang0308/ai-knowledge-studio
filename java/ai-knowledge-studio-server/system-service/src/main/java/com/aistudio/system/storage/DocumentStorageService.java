@@ -2,13 +2,17 @@ package com.aistudio.system.storage;
 
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
+import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
+import io.minio.Result;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import io.minio.messages.Item;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +53,48 @@ public class DocumentStorageService {
 
     public String getBucketName() {
         return bucketName;
+    }
+
+    public void deleteObjectIfExists(String bucketName, String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return;
+        }
+        try {
+            minioClient.removeObject(RemoveObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectKey)
+                    .build());
+            log.info("MinIO 对象已删除，bucketName={}，objectKey={}", bucketName, objectKey);
+        } catch (Exception exception) {
+            log.error("删除 MinIO 对象失败，bucketName={}，objectKey={}", bucketName, objectKey, exception);
+            throw new IllegalStateException("删除对象存储文件失败", exception);
+        }
+    }
+
+    public void deleteObjectsByPrefix(String bucketName, String prefix) {
+        if (prefix == null || prefix.isBlank()) {
+            return;
+        }
+        try {
+            Iterable<Result<Item>> results = minioClient.listObjects(ListObjectsArgs.builder()
+                    .bucket(bucketName)
+                    .prefix(prefix)
+                    .recursive(true)
+                    .build());
+            int deletedCount = 0;
+            for (Result<Item> result : results) {
+                Item item = result.get();
+                minioClient.removeObject(RemoveObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(item.objectName())
+                        .build());
+                deletedCount++;
+            }
+            log.info("MinIO 前缀对象清理完成，bucketName={}，prefix={}，deletedCount={}", bucketName, prefix, deletedCount);
+        } catch (Exception exception) {
+            log.error("按前缀删除 MinIO 对象失败，bucketName={}，prefix={}", bucketName, prefix, exception);
+            throw new IllegalStateException("删除处理产物失败", exception);
+        }
     }
 
     /**

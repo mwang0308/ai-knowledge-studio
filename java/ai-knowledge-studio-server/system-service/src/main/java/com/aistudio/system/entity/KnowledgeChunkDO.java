@@ -26,8 +26,11 @@ public class KnowledgeChunkDO {
     private Long knowledgeBaseId;
     private Long directoryId;
     private Long documentId;
+    private String documentUid;
     private Long documentVersionId;
+    private String documentVersionUid;
     private Long processTaskId;
+    private String processTaskUid;
     private Integer chunkNo;
     private String chunkHash;
     private String titlePath;

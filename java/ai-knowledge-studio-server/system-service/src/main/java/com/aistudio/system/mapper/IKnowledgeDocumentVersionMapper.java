@@ -4,6 +4,8 @@ import com.aistudio.system.entity.KnowledgeDocumentVersionDO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 知识文档版本 Mapper，只负责数据库访问，不接收 Request，不返回 Response。
  */
@@ -28,4 +30,10 @@ public interface IKnowledgeDocumentVersionMapper extends BaseMapper<KnowledgeDoc
     int updateParseFailed(@Param("versionId") Long versionId);
 
     int updateIndexSuccess(@Param("versionId") Long versionId, @Param("embeddingModel") String embeddingModel);
+
+    Integer selectMaxVersionNo(@Param("documentId") Long documentId);
+
+    List<KnowledgeDocumentVersionDO> selectByDocumentId(@Param("documentId") Long documentId);
+
+    int softDeleteByDocumentId(@Param("documentId") Long documentId);
 }

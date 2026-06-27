@@ -10,7 +10,7 @@ import lombok.Data;
 public class ReviewSubmitRequest {
 
     @NotNull(message = "文档 ID 不能为空")
-    private Long documentId;
+    private String documentId;
 
     private String reviewComment;
 }

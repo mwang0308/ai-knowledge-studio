@@ -12,11 +12,11 @@ public class KnowledgeDocumentUploadResponse {
 
     private Long fileResourceId;
 
-    private Long documentId;
+    private String documentId;
 
-    private Long versionId;
+    private String versionId;
 
-    private Long taskId;
+    private String taskId;
 
     private String taskNo;
 

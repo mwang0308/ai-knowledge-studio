@@ -10,6 +10,13 @@
           and deleted = 0
     </update>
 
+    <select id="selectByTaskUid" resultType="com.aistudio.system.entity.KnowledgeProcessTaskDO">
+        select *
+        from knowledge_process_task
+        where task_uid = #{taskUid}
+        limit 1
+    </select>
+
     <update id="updateRunning">
         update knowledge_process_task
         set task_status = 'RUNNING',
@@ -42,6 +49,21 @@
             error_code = #{errorCode},
             error_message = #{errorMessage}
         where id = #{id}
+          and deleted = 0
+    </update>
+
+    <select id="countRunningByDocumentId" resultType="java.lang.Integer">
+        select count(1)
+        from knowledge_process_task
+        where document_id = #{documentId}
+          and task_status in ('PENDING', 'QUEUED', 'RUNNING')
+          and deleted = 0
+    </select>
+
+    <update id="softDeleteByDocumentId">
+        update knowledge_process_task
+        set deleted = 1
+        where document_id = #{documentId}
           and deleted = 0
     </update>
 </mapper>

@@ -16,4 +16,14 @@ public interface IFileResourceMapper extends BaseMapper<FileResourceDO> {
      * @return 文件资源持久化对象
      */
     FileResourceDO selectByFileHash(@Param("fileHash") String fileHash);
+
+    int countActiveReference(@Param("fileResourceId") Long fileResourceId, @Param("excludeDocumentId") Long excludeDocumentId);
+
+    /**
+     * 物理删除已确认无引用的文件资源元数据。
+     *
+     * @param fileResourceId 文件资源 ID
+     * @return 删除行数
+     */
+    int deleteIfUnreferenced(@Param("fileResourceId") Long fileResourceId);
 }

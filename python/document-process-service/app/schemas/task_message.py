@@ -7,13 +7,13 @@ class DocumentProcessMessage(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     messageId: str
-    taskId: int
+    taskId: str
     taskNo: str | None = None
     stageCode: str
     knowledgeBaseId: int
     directoryId: int
-    documentId: int
-    versionId: int
+    documentId: str
+    versionId: str
     fileResourceId: int
     fileName: str
     fileType: str

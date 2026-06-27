@@ -23,6 +23,8 @@ public class KnowledgeDocumentVersionDO {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private String versionUid;
+
     private Long documentId;
 
     private Integer versionNo;

@@ -38,4 +38,26 @@
           and file_hash = #{fileHash}
         limit 1
     </select>
+
+    <select id="countActiveReference" resultType="java.lang.Integer">
+        select (
+            select count(1)
+            from knowledge_document
+            where file_resource_id = #{fileResourceId}
+              and deleted = 0
+              and id != #{excludeDocumentId}
+        ) + (
+            select count(1)
+            from knowledge_document_version
+            where file_resource_id = #{fileResourceId}
+              and deleted = 0
+              and document_id != #{excludeDocumentId}
+        )
+    </select>
+
+    <delete id="deleteIfUnreferenced">
+        delete from file_resource
+        where id = #{fileResourceId}
+          and deleted = 0
+    </delete>
 </mapper>

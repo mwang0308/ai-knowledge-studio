@@ -23,6 +23,8 @@ public class KnowledgeProcessTaskDO {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private String taskUid;
+
     private String taskNo;
 
     private Long knowledgeBaseId;

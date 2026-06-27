@@ -12,7 +12,7 @@ public class RetrievalCandidateQuery {
 
     private Long knowledgeBaseId;
     private Long directoryId;
-    private Long documentId;
+    private String documentId;
     private String testScope;
     private Integer limitSize;
 }

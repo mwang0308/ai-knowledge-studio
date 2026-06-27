@@ -12,7 +12,7 @@ class SystemServiceCallbackClient:
 
     def post_callback(self, callback_url: str, payload: ProcessCallback) -> None:
         logger.info(
-            "post document process callback task_id=%s status=%s progress=%s",
+            "发送文档处理回调 task_id=%s status=%s progress=%s",
             payload.taskId,
             payload.status,
             payload.progress,

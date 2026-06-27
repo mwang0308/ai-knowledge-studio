@@ -15,7 +15,7 @@ public class RetrievalTestResponse {
     private Long testId;
     private Long knowledgeBaseId;
     private Long directoryId;
-    private Long documentId;
+    private String documentId;
     private String queryText;
     private String testScope;
     private Integer topK;

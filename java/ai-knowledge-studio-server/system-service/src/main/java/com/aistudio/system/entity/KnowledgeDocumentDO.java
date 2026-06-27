@@ -1,6 +1,7 @@
 package com.aistudio.system.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
@@ -23,6 +24,8 @@ public class KnowledgeDocumentDO {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private String documentUid;
+
     private Long knowledgeBaseId;
 
     private Long directoryId;
@@ -32,6 +35,9 @@ public class KnowledgeDocumentDO {
     private Long fileResourceId;
 
     private Long currentVersionId;
+
+    @TableField(exist = false)
+    private String currentVersionUid;
 
     private String fileName;
 

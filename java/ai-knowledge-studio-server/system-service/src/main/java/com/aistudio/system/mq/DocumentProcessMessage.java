@@ -12,7 +12,7 @@ public class DocumentProcessMessage {
 
     private String messageId;
 
-    private Long taskId;
+    private String taskId;
 
     private String taskNo;
 
@@ -22,9 +22,9 @@ public class DocumentProcessMessage {
 
     private Long directoryId;
 
-    private Long documentId;
+    private String documentId;
 
-    private Long versionId;
+    private String versionId;
 
     private Long fileResourceId;
 

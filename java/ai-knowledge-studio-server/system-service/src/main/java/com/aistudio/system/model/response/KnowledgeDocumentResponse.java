@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Builder
 public class KnowledgeDocumentResponse {
 
-    private Long id;
+    private String id;
 
     private Long knowledgeBaseId;
 
@@ -20,7 +20,7 @@ public class KnowledgeDocumentResponse {
 
     private String name;
 
-    private Long currentVersionId;
+    private String currentVersionId;
 
     private String fileName;
 

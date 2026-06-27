@@ -34,3 +34,10 @@ ServiceImpl 使用 `@Resource` 字段注入，不使用构造方法注入。
 - XML 文件使用 `XxxMapper.xml`。
 - Mapper 接收 Query，不接收 Request。
 - Mapper 返回 DO，不返回 Response。
+
+## ID 规范
+
+- 数据库自增 `id` 只作为内部主键，不作为前端、MQ、Python 回调、ES/Milvus 过滤、MinIO 解析产物路径的查询 ID。
+- 文档处理链路的 `documentId`、`versionId`、`taskId`、`chunkId`、`sectionId`、`blockId` 必须使用 32 位无横杠 UUID。
+- Response、Request、MQ 消息中的上述 ID 类型使用 `String`。
+- Mapper 可以使用内部 Long 主键做表关联，但 Request 进入 Service 后必须先通过业务 UUID 查询 DO，再使用内部主键操作数据库。

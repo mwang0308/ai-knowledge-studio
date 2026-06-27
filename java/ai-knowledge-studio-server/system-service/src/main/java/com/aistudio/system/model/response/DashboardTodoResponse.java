@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Builder
 public class DashboardTodoResponse {
 
-    private Long documentId;
+    private String documentId;
 
     private String documentName;
 

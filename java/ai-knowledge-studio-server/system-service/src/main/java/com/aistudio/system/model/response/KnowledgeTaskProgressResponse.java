@@ -12,13 +12,13 @@ import java.time.LocalDateTime;
 @Builder
 public class KnowledgeTaskProgressResponse {
 
-    private Long taskId;
+    private String taskId;
 
     private String taskNo;
 
-    private Long documentId;
+    private String documentId;
 
-    private Long versionId;
+    private String versionId;
 
     private String stageCode;
 

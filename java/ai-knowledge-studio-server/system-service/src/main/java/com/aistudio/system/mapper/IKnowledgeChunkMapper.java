@@ -21,6 +21,10 @@ public interface IKnowledgeChunkMapper extends BaseMapper<KnowledgeChunkDO> {
 
     int deleteByTaskId(@Param("taskId") Long taskId);
 
+    int deleteByDocumentId(@Param("documentId") Long documentId);
+
+    int deleteByDocumentVersion(@Param("documentId") Long documentId, @Param("versionId") Long versionId);
+
     int updatePublishStatus(@Param("documentId") Long documentId,
                             @Param("versionId") Long versionId,
                             @Param("publishStatus") String publishStatus,

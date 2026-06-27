@@ -11,8 +11,8 @@ public class KnowledgeChunkPageRequest {
 
     private Long knowledgeBaseId;
     private Long directoryId;
-    private Long documentId;
-    private Long versionId;
+    private String documentId;
+    private String versionId;
     private String publishStatus;
     private Integer enabled;
 

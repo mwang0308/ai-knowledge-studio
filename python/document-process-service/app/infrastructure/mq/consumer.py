@@ -44,7 +44,7 @@ class DocumentProcessConsumer:
         channel.queue_declare(queue=settings.rabbitmq_queue, durable=True)
         channel.basic_qos(prefetch_count=1)
         channel.basic_consume(queue=settings.rabbitmq_queue, on_message_callback=self._handle_message)
-        logger.info("document process consumer started queue=%s", settings.rabbitmq_queue)
+        logger.info("文档处理 MQ 消费者已启动 queue=%s", settings.rabbitmq_queue)
         channel.start_consuming()
 
     def _handle_message(self, channel, method, properties, body: bytes) -> None:
@@ -52,9 +52,9 @@ class DocumentProcessConsumer:
         try:
             payload = json.loads(body.decode("utf-8"))
             message = DocumentProcessMessage.model_validate(payload)
-            logger.info("consume document process message task_id=%s message_id=%s", message.taskId, message.messageId)
-            self._post_running(message, 10)
-            result = self._pipeline.run(message)
+            logger.info("消费文档处理消息 task_id=%s message_id=%s", message.taskId, message.messageId)
+            self._post_running(message, 8)
+            result = self._pipeline.run(message, lambda progress: self._post_running(message, progress))
             self._callback_client.post_callback(
                 message.callbackUrl,
                 ProcessCallback(
@@ -70,7 +70,7 @@ class DocumentProcessConsumer:
             )
             channel.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as exc:
-            logger.exception("document process message failed")
+            logger.exception("文档处理消息执行失败")
             if message is not None:
                 self._post_failed(message, exc)
             channel.basic_ack(delivery_tag=method.delivery_tag)

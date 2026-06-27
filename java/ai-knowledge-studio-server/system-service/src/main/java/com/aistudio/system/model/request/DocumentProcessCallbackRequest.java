@@ -13,9 +13,9 @@ import java.time.LocalDateTime;
 public class DocumentProcessCallbackRequest {
 
     @NotNull(message = "任务 ID 不能为空")
-    private Long taskId;
+    private String taskId;
 
-    private Long documentId;
+    private String documentId;
 
     @NotBlank(message = "阶段编码不能为空")
     private String stageCode;

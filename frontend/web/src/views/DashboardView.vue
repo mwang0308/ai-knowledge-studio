@@ -18,7 +18,7 @@
     <section class="panel section-gap">
       <div class="panel-head">
         <h2>知识治理流程</h2>
-        <span class="status blue">层级：知识库 → 目录 → 文档 → 结构块 → 分片</span>
+        <span class="status blue">层级：知识库 → 目录 → 文档 → 解析块 → 分片</span>
       </div>
       <div class="panel-body">
         <div class="flow">
@@ -137,7 +137,7 @@ const flows = [
   { no: '02', name: '目录规则', desc: '在知识库下建目录', path: '/directory' },
   { no: '03', name: '文档上传', desc: '挂到具体目录', path: '/upload' },
   { no: '04', name: '解析处理', desc: 'Parser Router', path: '/document' },
-  { no: '05', name: '分片预览', desc: '结构块与 chunk', path: '/document' },
+  { no: '05', name: '分片预览', desc: '解析块与 chunk', path: '/document' },
   { no: '06', name: '召回测试', desc: '验证命中来源', path: '/retrieval' },
   { no: '07', name: '审核发布', desc: '启用正式检索', path: '/publish' },
 ];

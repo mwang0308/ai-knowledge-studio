@@ -10,5 +10,5 @@ import lombok.Data;
 public class PublishSubmitRequest {
 
     @NotNull(message = "文档 ID 不能为空")
-    private Long documentId;
+    private String documentId;
 }

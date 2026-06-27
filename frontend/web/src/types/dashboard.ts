@@ -12,7 +12,7 @@ export interface DashboardTodoPageRequest {
 }
 
 export interface DashboardTodoResponse {
-  documentId: number;
+  documentId: string;
   documentName: string;
   knowledgeBaseId: number;
   directoryId: number;

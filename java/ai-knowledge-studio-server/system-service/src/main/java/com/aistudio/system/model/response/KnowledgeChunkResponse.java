@@ -17,8 +17,8 @@ public class KnowledgeChunkResponse {
     private String chunkId;
     private Long knowledgeBaseId;
     private Long directoryId;
-    private Long documentId;
-    private Long documentVersionId;
+    private String documentId;
+    private String documentVersionId;
     private Integer chunkNo;
     private String titlePath;
     private String contentPreview;
@@ -27,6 +27,9 @@ public class KnowledgeChunkResponse {
     private Integer pageStart;
     private Integer pageEnd;
     private List<String> blockIds;
+    private List<String> blockNames;
+    private String parseBlockId;
+    private String parseBlockName;
     private String publishStatus;
     private Integer enabled;
     private LocalDateTime createTime;

@@ -85,7 +85,7 @@ public class DashboardServiceImpl implements IDashboardService {
             actionPath = "/retrieval";
         }
         return DashboardTodoResponse.builder()
-                .documentId(documentDO.getId())
+                .documentId(documentDO.getDocumentUid())
                 .documentName(documentDO.getName())
                 .knowledgeBaseId(documentDO.getKnowledgeBaseId())
                 .directoryId(documentDO.getDirectoryId())

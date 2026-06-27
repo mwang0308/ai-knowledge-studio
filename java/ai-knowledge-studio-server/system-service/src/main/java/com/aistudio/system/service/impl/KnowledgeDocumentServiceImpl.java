@@ -10,6 +10,8 @@ import com.aistudio.system.entity.KnowledgeChunkDO;
 import com.aistudio.system.entity.KnowledgeBaseDO;
 import com.aistudio.system.entity.KnowledgeDirectoryDO;
 import com.aistudio.system.entity.KnowledgeDocumentDO;
+import com.aistudio.system.entity.KnowledgeDocumentParseBlockDO;
+import com.aistudio.system.entity.KnowledgeDocumentStructureDO;
 import com.aistudio.system.entity.KnowledgeDocumentVersionDO;
 import com.aistudio.system.entity.KnowledgeProcessTaskDO;
 import com.aistudio.system.entity.KnowledgePublishRecordDO;
@@ -20,6 +22,8 @@ import com.aistudio.system.mapper.IKnowledgeBaseMapper;
 import com.aistudio.system.mapper.IKnowledgeChunkMapper;
 import com.aistudio.system.mapper.IKnowledgeDirectoryMapper;
 import com.aistudio.system.mapper.IKnowledgeDocumentMapper;
+import com.aistudio.system.mapper.IKnowledgeDocumentParseBlockMapper;
+import com.aistudio.system.mapper.IKnowledgeDocumentStructureMapper;
 import com.aistudio.system.mapper.IKnowledgeDocumentVersionMapper;
 import com.aistudio.system.mapper.IKnowledgePublishRecordMapper;
 import com.aistudio.system.mapper.IKnowledgeProcessTaskMapper;
@@ -35,6 +39,7 @@ import com.aistudio.system.model.request.RetrievalTestRequest;
 import com.aistudio.system.model.request.ReviewSubmitRequest;
 import com.aistudio.system.model.response.KnowledgeChunkResponse;
 import com.aistudio.system.model.response.KnowledgeDocumentResponse;
+import com.aistudio.system.model.response.KnowledgeDocumentStructureResponse;
 import com.aistudio.system.model.response.KnowledgeDocumentUploadResponse;
 import com.aistudio.system.model.response.KnowledgeTaskProgressResponse;
 import com.aistudio.system.model.response.RetrievalHitResponse;
@@ -51,6 +56,7 @@ import com.aistudio.system.enums.DocumentParseStatusEnum;
 import com.aistudio.system.enums.DocumentPublishStatusEnum;
 import com.aistudio.system.enums.DocumentReviewStatusEnum;
 import com.aistudio.system.enums.ProcessTaskStatusEnum;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -63,15 +69,19 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -83,7 +93,8 @@ import java.util.stream.Collectors;
 @Service
 public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
 
-    private static final String DEFAULT_CHUNK_CONFIG_SNAPSHOT = "{\"source\":\"system-default\"}";
+    private static final String DEFAULT_PDF_PARSER = "docling";
+    private static final Set<String> PDF_PARSERS = Set.of(DEFAULT_PDF_PARSER, "mineru", "pdf");
     private static final int CALLBACK_SUCCESS_PROGRESS = 100;
     private static final Set<String> TERMINAL_TASK_STATUS = Set.of(
             ProcessTaskStatusEnum.SUCCESS.getCode(), ProcessTaskStatusEnum.FAILED.getCode());
@@ -108,6 +119,12 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
 
     @Resource
     private IKnowledgeChunkMapper knowledgeChunkMapper;
+
+    @Resource
+    private IKnowledgeDocumentStructureMapper knowledgeDocumentStructureMapper;
+
+    @Resource
+    private IKnowledgeDocumentParseBlockMapper knowledgeDocumentParseBlockMapper;
 
     @Resource
     private IKnowledgeRetrievalTestMapper knowledgeRetrievalTestMapper;
@@ -162,12 +179,14 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
 
         FileResourceDO fileResourceDO = getOrCreateFileResource(fileMetadata);
         KnowledgeDocumentDO documentDO = createDocument(request, fileMetadata, fileResourceDO);
-        KnowledgeDocumentVersionDO versionDO = createDocumentVersion(documentDO, fileResourceDO);
+        KnowledgeDocumentVersionDO versionDO = createDocumentVersion(
+                documentDO, fileResourceDO, 1, request.getParserType());
         knowledgeDocumentMapper.updateCurrentVersionId(documentDO.getId(), versionDO.getId());
         knowledgeBaseMapper.increaseDocumentCount(request.getKnowledgeBaseId(), 1);
         documentDO.setCurrentVersionId(versionDO.getId());
+        documentDO.setCurrentVersionUid(versionDO.getVersionUid());
 
-        KnowledgeProcessTaskDO taskDO = createProcessTask(request, documentDO, versionDO);
+        KnowledgeProcessTaskDO taskDO = createProcessTask(documentDO, versionDO);
         String messageId = sendParseChunkMessage(knowledgeBaseDO, directoryDO, fileResourceDO, documentDO, versionDO, taskDO);
         taskDO.setMqMessageId(messageId);
         knowledgeProcessTaskMapper.updateMqMessageId(taskDO.getId(), messageId);
@@ -175,6 +194,99 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         log.info("上传文档完成，documentId={}，versionId={}，taskId={}，mqMessageId={}",
                 documentDO.getId(), versionDO.getId(), taskDO.getId(), messageId);
         return knowledgeDocumentConvert.toUploadResponse(fileResourceDO, documentDO, versionDO, taskDO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public KnowledgeDocumentUploadResponse reuploadDocument(String documentId, MultipartFile file) {
+        log.info("重新上传文档开始，documentId={}，fileName={}，fileSize={}",
+                documentId, file == null ? null : file.getOriginalFilename(), file == null ? null : file.getSize());
+        KnowledgeDocumentDO documentDO = getExistingDocument(documentId);
+        ensureNoRunningTask(documentDO.getId(), "重新上传");
+        KnowledgeBaseDO knowledgeBaseDO = getExistingKnowledgeBase(documentDO.getKnowledgeBaseId());
+        KnowledgeDirectoryDO directoryDO = getExistingDirectory(documentDO.getDirectoryId(), documentDO.getKnowledgeBaseId());
+        FileMetadata fileMetadata = readAndCheckFile(file);
+        FileResourceDO fileResourceDO = getOrCreateFileResource(fileMetadata);
+        Integer maxVersionNo = knowledgeDocumentVersionMapper.selectMaxVersionNo(documentDO.getId());
+        KnowledgeDocumentVersionDO versionDO = createDocumentVersion(documentDO, fileResourceDO,
+                maxVersionNo == null ? 1 : maxVersionNo + 1, null);
+
+        knowledgeDocumentMapper.updateForNewVersion(documentDO.getId(), fileResourceDO.getId(), versionDO.getId(),
+                removeExt(fileMetadata.fileName()), fileResourceDO.getFileName(), fileResourceDO.getFileExt(),
+                fileResourceDO.getFileSize(), fileResourceDO.getFileHash());
+        refreshDocumentAfterReupload(documentDO, fileResourceDO, versionDO, fileMetadata);
+
+        KnowledgeProcessTaskDO taskDO = createProcessTask(documentDO, versionDO);
+        String messageId = sendParseChunkMessage(knowledgeBaseDO, directoryDO, fileResourceDO, documentDO, versionDO, taskDO);
+        taskDO.setMqMessageId(messageId);
+        knowledgeProcessTaskMapper.updateMqMessageId(taskDO.getId(), messageId);
+        log.info("重新上传文档完成，documentId={}，versionId={}，taskId={}，mqMessageId={}",
+                documentId, versionDO.getId(), taskDO.getId(), messageId);
+        return knowledgeDocumentConvert.toUploadResponse(fileResourceDO, documentDO, versionDO, taskDO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public KnowledgeDocumentUploadResponse reprocessDocument(String documentId) {
+        log.info("重新处理文档开始，documentId={}", documentId);
+        KnowledgeDocumentDO documentDO = getExistingDocument(documentId);
+        ensureNoRunningTask(documentDO.getId(), "重新处理");
+        KnowledgeDocumentVersionDO versionDO = knowledgeDocumentVersionMapper.selectById(documentDO.getCurrentVersionId());
+        if (versionDO == null || Integer.valueOf(1).equals(versionDO.getDeleted())) {
+            log.warn("重新处理文档失败，当前版本不存在，documentId={}，versionId={}",
+                    documentId, documentDO.getCurrentVersionId());
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "当前文档版本不存在");
+        }
+        FileResourceDO fileResourceDO = fileResourceMapper.selectById(versionDO.getFileResourceId());
+        if (fileResourceDO == null || Integer.valueOf(1).equals(fileResourceDO.getDeleted())) {
+            log.warn("重新处理文档失败，文件资源不存在，documentId={}，fileResourceId={}",
+                    documentId, versionDO.getFileResourceId());
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "文件资源不存在");
+        }
+        KnowledgeBaseDO knowledgeBaseDO = getExistingKnowledgeBase(documentDO.getKnowledgeBaseId());
+        KnowledgeDirectoryDO directoryDO = getExistingDirectory(documentDO.getDirectoryId(), documentDO.getKnowledgeBaseId());
+
+        // 重跑当前版本前清理旧分片，避免新旧分片在预览、召回和审核阶段混用。
+        knowledgeChunkMapper.deleteByDocumentVersion(documentDO.getId(), versionDO.getId());
+        knowledgeDocumentStructureMapper.deleteByDocumentVersion(documentDO.getId(), versionDO.getId());
+        knowledgeDocumentParseBlockMapper.deleteByDocumentVersion(documentDO.getId(), versionDO.getId());
+        resetDocumentForQueuedProcess(documentDO, versionDO);
+        KnowledgeProcessTaskDO taskDO = createProcessTask(documentDO, versionDO);
+        String messageId = sendParseChunkMessage(knowledgeBaseDO, directoryDO, fileResourceDO, documentDO, versionDO, taskDO);
+        taskDO.setMqMessageId(messageId);
+        knowledgeProcessTaskMapper.updateMqMessageId(taskDO.getId(), messageId);
+        log.info("重新处理文档完成，documentId={}，versionId={}，taskId={}，mqMessageId={}",
+                documentId, versionDO.getId(), taskDO.getId(), messageId);
+        return knowledgeDocumentConvert.toUploadResponse(fileResourceDO, documentDO, versionDO, taskDO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteDocument(String documentId) {
+        log.info("删除文档开始，documentId={}", documentId);
+        KnowledgeDocumentDO documentDO = getExistingDocument(documentId);
+        List<KnowledgeDocumentVersionDO> versions = knowledgeDocumentVersionMapper.selectByDocumentId(documentDO.getId());
+        List<Long> fileResourceIds = versions.stream()
+                .map(KnowledgeDocumentVersionDO::getFileResourceId)
+                .filter(item -> item != null)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (documentDO.getFileResourceId() != null) {
+            fileResourceIds.add(documentDO.getFileResourceId());
+        }
+        deleteExclusiveOriginalFiles(documentDO.getId(), fileResourceIds);
+        documentStorageService.deleteObjectsByPrefix(documentStorageService.getBucketName(),
+                "parsed/" + documentDO.getKnowledgeBaseId() + "/" + documentDO.getDocumentUid() + "/");
+
+        knowledgeChunkMapper.deleteByDocumentId(documentDO.getId());
+        knowledgeDocumentStructureMapper.deleteByDocumentId(documentDO.getId());
+        knowledgeDocumentParseBlockMapper.deleteByDocumentId(documentDO.getId());
+        knowledgeProcessTaskMapper.softDeleteByDocumentId(documentDO.getId());
+        knowledgeDocumentVersionMapper.softDeleteByDocumentId(documentDO.getId());
+        softDeleteGovernanceRecords(documentDO.getId());
+        knowledgeDocumentMapper.softDeleteById(documentDO.getId());
+        knowledgeBaseMapper.increaseDocumentCount(documentDO.getKnowledgeBaseId(), -1);
+        log.info("删除文档完成，documentId={}，versionCount={}，fileResourceCount={}",
+                documentId, versions.size(), fileResourceIds.stream().distinct().count());
     }
 
     @Override
@@ -193,13 +305,35 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
     }
 
     @Override
-    public KnowledgeTaskProgressResponse getTaskProgress(Long taskId) {
-        KnowledgeProcessTaskDO taskDO = knowledgeProcessTaskMapper.selectById(taskId);
+    public KnowledgeTaskProgressResponse getTaskProgress(String taskId) {
+        KnowledgeProcessTaskDO taskDO = knowledgeProcessTaskMapper.selectByTaskUid(taskId);
         if (taskDO == null || Integer.valueOf(1).equals(taskDO.getDeleted())) {
             log.warn("查询任务进度失败，任务不存在，taskId={}", taskId);
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务不存在");
         }
-        return knowledgeDocumentConvert.toTaskProgressResponse(taskDO);
+        return toTaskProgressResponse(taskDO);
+    }
+
+    @Override
+    public KnowledgeDocumentStructureResponse getDocumentStructure(String documentId) {
+        log.info("查询文档结构树，documentId={}", documentId);
+        KnowledgeDocumentDO documentDO = getExistingDocument(documentId);
+        KnowledgeDocumentVersionDO versionDO = knowledgeDocumentVersionMapper.selectById(documentDO.getCurrentVersionId());
+        if (versionDO == null || Integer.valueOf(1).equals(versionDO.getDeleted())) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "当前文档版本不存在");
+        }
+        List<KnowledgeDocumentStructureDO> structureList = knowledgeDocumentStructureMapper
+                .selectByDocumentVersion(documentDO.getId(), versionDO.getId());
+        List<KnowledgeDocumentParseBlockDO> blockList = knowledgeDocumentParseBlockMapper
+                .selectByDocumentVersion(documentDO.getId(), versionDO.getId());
+        return KnowledgeDocumentStructureResponse.builder()
+                .documentId(documentDO.getDocumentUid())
+                .versionId(versionDO.getVersionUid())
+                .directoryTree(buildDirectoryTreeResponse(structureList))
+                .parseBlocks(blockList.stream()
+                        .map(this::toParseBlockResponse)
+                        .collect(Collectors.toList()))
+                .build();
     }
 
     @Override
@@ -208,6 +342,9 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         log.info("接收文档处理回调，taskId={}，stageCode={}，status={}，progress={}",
                 request.getTaskId(), request.getStageCode(), request.getStatus(), request.getProgress());
         KnowledgeProcessTaskDO taskDO = getCallbackTask(request.getTaskId());
+        if (taskDO == null) {
+            return;
+        }
         validateCallback(request, taskDO);
 
         if (TERMINAL_TASK_STATUS.contains(taskDO.getTaskStatus())) {
@@ -271,11 +408,13 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         List<RetrievalHitResponse> rankedHits = rankHits(hits);
         double topScore = rankedHits.isEmpty() ? 0D : rankedHits.get(0).getScore();
         long latency = System.currentTimeMillis() - start;
+        KnowledgeDocumentDO scopedDocument = request.getDocumentId() == null || request.getDocumentId().isBlank()
+                ? null : getExistingDocument(request.getDocumentId());
 
         KnowledgeRetrievalTestDO testDO = KnowledgeRetrievalTestDO.builder()
                 .knowledgeBaseId(request.getKnowledgeBaseId())
                 .directoryId(request.getDirectoryId())
-                .documentId(request.getDocumentId())
+                .documentId(scopedDocument == null ? null : scopedDocument.getId())
                 .queryText(request.getQueryText())
                 .topK(normalizeTopK(request.getTopK()))
                 .testScope(request.getTestScope())
@@ -346,11 +485,15 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         log.info("文档下架完成，documentId={}，versionId={}", documentDO.getId(), documentDO.getCurrentVersionId());
     }
 
-    private KnowledgeProcessTaskDO getCallbackTask(Long taskId) {
-        KnowledgeProcessTaskDO taskDO = knowledgeProcessTaskMapper.selectById(taskId);
-        if (taskDO == null || Integer.valueOf(1).equals(taskDO.getDeleted())) {
+    private KnowledgeProcessTaskDO getCallbackTask(String taskId) {
+        KnowledgeProcessTaskDO taskDO = knowledgeProcessTaskMapper.selectByTaskUid(taskId);
+        if (taskDO == null) {
             log.warn("文档处理回调失败，任务不存在，taskId={}", taskId);
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务不存在");
+        }
+        if (Integer.valueOf(1).equals(taskDO.getDeleted())) {
+            log.info("文档处理回调对应任务已删除，忽略本次回调，taskId={}", taskId);
+            return null;
         }
         return taskDO;
     }
@@ -361,9 +504,11 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
                     taskDO.getId(), taskDO.getStageCode(), request.getStageCode());
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "回调阶段不匹配");
         }
-        if (request.getDocumentId() != null && !taskDO.getDocumentId().equals(request.getDocumentId())) {
+        KnowledgeDocumentDO documentDO = knowledgeDocumentMapper.selectById(taskDO.getDocumentId());
+        if (request.getDocumentId() != null
+                && (documentDO == null || !documentDO.getDocumentUid().equals(request.getDocumentId()))) {
             log.warn("文档处理回调失败，文档不匹配，taskId={}，taskDocumentId={}，callbackDocumentId={}",
-                    taskDO.getId(), taskDO.getDocumentId(), request.getDocumentId());
+                    taskDO.getTaskUid(), documentDO == null ? null : documentDO.getDocumentUid(), request.getDocumentId());
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "回调文档不匹配");
         }
     }
@@ -383,7 +528,8 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         int tokenCount = result == null || result.getTokenCount() == null ? 0 : result.getTokenCount();
         String parserName = result == null ? null : result.getParserName();
 
-        // 解析分片成功后先落 MySQL 分片元数据，正文仍保存在 MinIO chunks.jsonl，后续可重建 ES/Milvus。
+        // 解析分片成功后落目录结构和分片元数据，正文仍保存在 MinIO chunks.jsonl，后续可重建 ES/Milvus。
+        persistStructureFromArtifact(taskDO, result);
         persistChunksFromArtifact(taskDO, result);
         knowledgeDocumentMapper.updateParseSuccess(taskDO.getDocumentId(), taskDO.getDocumentVersionId(), chunkCount);
         knowledgeDocumentVersionMapper.updateParseSuccess(taskDO.getDocumentVersionId(), chunkCount, tokenCount, parserName);
@@ -414,6 +560,102 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         log.info("分片元数据入库完成，taskId={}，savedCount={}", taskDO.getId(), savedCount);
     }
 
+    private void persistStructureFromArtifact(KnowledgeProcessTaskDO taskDO, DocumentProcessCallbackResult result) {
+        if (result == null || result.getStructureObjectKey() == null || result.getStructureObjectKey().isBlank()) {
+            log.warn("文档处理成功但未返回结构产物，taskId={}", taskDO.getId());
+            return;
+        }
+        knowledgeDocumentStructureMapper.deleteByDocumentVersion(taskDO.getDocumentId(), taskDO.getDocumentVersionId());
+        knowledgeDocumentParseBlockMapper.deleteByDocumentVersion(taskDO.getDocumentId(), taskDO.getDocumentVersionId());
+        String structureText = documentStorageService.readTextObject(documentStorageService.getBucketName(), result.getStructureObjectKey());
+        try {
+            JsonNode rootNode = objectMapper.readTree(structureText);
+            persistParseBlocks(taskDO, rootNode.path("parse_blocks"));
+            persistStructureSections(taskDO, rootNode.path("sections"));
+        } catch (Exception exception) {
+            log.error("解析文档结构产物失败，taskId={}，structureObjectKey={}",
+                    taskDO.getId(), result.getStructureObjectKey(), exception);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "解析文档结构产物失败");
+        }
+    }
+
+    private void persistParseBlocks(KnowledgeProcessTaskDO taskDO, JsonNode blocksNode) {
+        if (blocksNode == null || !blocksNode.isArray()) {
+            return;
+        }
+        int sortOrder = 1;
+        for (JsonNode blockNode : blocksNode) {
+            KnowledgeDocumentParseBlockDO blockDO = KnowledgeDocumentParseBlockDO.builder()
+                    .parseBlockUid(textValue(blockNode, "parse_block_id", UUID.randomUUID().toString().replace("-", "")))
+                    .knowledgeBaseId(taskDO.getKnowledgeBaseId())
+                    .directoryId(taskDO.getDirectoryId())
+                    .documentId(taskDO.getDocumentId())
+                    .documentUid(textValue(blockNode, "document_id", ""))
+                    .documentVersionId(taskDO.getDocumentVersionId())
+                    .documentVersionUid(textValue(blockNode, "version_id", ""))
+                    .processTaskId(taskDO.getId())
+                    .processTaskUid(taskDO.getTaskUid())
+                    .blockName(textValue(blockNode, "parse_block_name", "未命名解析块"))
+                    .pageStart(intNullable(blockNode, "page_start"))
+                    .pageEnd(intNullable(blockNode, "page_end"))
+                    .sectionIdsJson(writeJsonString(blockNode.get("section_ids")))
+                    .sectionTitlesJson(writeJsonString(blockNode.get("section_titles")))
+                    .textPreview(trimToLength(textValue(blockNode, "text_preview", ""), 1000))
+                    .sortOrder(sortOrder++)
+                    .metadataJson(blockNode.toString())
+                    .deleted(0)
+                    .build();
+            fillDocumentUidIfMissing(taskDO, blockDO);
+            knowledgeDocumentParseBlockMapper.insert(blockDO);
+        }
+    }
+
+    private void persistStructureSections(KnowledgeProcessTaskDO taskDO, JsonNode sectionsNode) {
+        if (sectionsNode == null || !sectionsNode.isArray()) {
+            return;
+        }
+        int sortOrder = 1;
+        for (JsonNode sectionNode : sectionsNode) {
+            KnowledgeDocumentStructureDO structureDO = KnowledgeDocumentStructureDO.builder()
+                    .sectionUid(textValue(sectionNode, "section_id", UUID.randomUUID().toString().replace("-", "")))
+                    .parentSectionUid(textNullable(sectionNode, "parent_section_id"))
+                    .knowledgeBaseId(taskDO.getKnowledgeBaseId())
+                    .directoryId(taskDO.getDirectoryId())
+                    .documentId(taskDO.getDocumentId())
+                    .documentUid(textValue(sectionNode, "document_id", ""))
+                    .documentVersionId(taskDO.getDocumentVersionId())
+                    .documentVersionUid(textValue(sectionNode, "version_id", ""))
+                    .processTaskId(taskDO.getId())
+                    .processTaskUid(taskDO.getTaskUid())
+                    .title(textValue(sectionNode, "title", "未命名目录"))
+                    .titlePath(textValue(sectionNode, "title_path", "未命名目录"))
+                    .level(intValue(sectionNode, "level", 1))
+                    .pageStart(firstBlockIntValue(sectionNode, "page_start"))
+                    .pageEnd(firstBlockIntValue(sectionNode, "page_end"))
+                    .blockCount(arraySize(sectionNode.get("blocks")))
+                    .sortOrder(sortOrder++)
+                    .metadataJson(sectionNode.toString())
+                    .deleted(0)
+                    .build();
+            fillDocumentUidIfMissing(taskDO, structureDO);
+            knowledgeDocumentStructureMapper.insert(structureDO);
+        }
+    }
+
+    private void fillDocumentUidIfMissing(KnowledgeProcessTaskDO taskDO, KnowledgeDocumentStructureDO structureDO) {
+        KnowledgeDocumentDO documentDO = knowledgeDocumentMapper.selectById(taskDO.getDocumentId());
+        KnowledgeDocumentVersionDO versionDO = knowledgeDocumentVersionMapper.selectById(taskDO.getDocumentVersionId());
+        structureDO.setDocumentUid(documentDO == null ? "" : documentDO.getDocumentUid());
+        structureDO.setDocumentVersionUid(versionDO == null ? "" : versionDO.getVersionUid());
+    }
+
+    private void fillDocumentUidIfMissing(KnowledgeProcessTaskDO taskDO, KnowledgeDocumentParseBlockDO blockDO) {
+        KnowledgeDocumentDO documentDO = knowledgeDocumentMapper.selectById(taskDO.getDocumentId());
+        KnowledgeDocumentVersionDO versionDO = knowledgeDocumentVersionMapper.selectById(taskDO.getDocumentVersionId());
+        blockDO.setDocumentUid(documentDO == null ? "" : documentDO.getDocumentUid());
+        blockDO.setDocumentVersionUid(versionDO == null ? "" : versionDO.getVersionUid());
+    }
+
     private KnowledgeChunkDO toChunkDO(KnowledgeProcessTaskDO taskDO, String chunksObjectKey, String jsonLine) {
         try {
             JsonNode node = objectMapper.readTree(jsonLine);
@@ -423,8 +665,11 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
                     .knowledgeBaseId(taskDO.getKnowledgeBaseId())
                     .directoryId(taskDO.getDirectoryId())
                     .documentId(taskDO.getDocumentId())
+                    .documentUid(textValue(node, "document_id", null))
                     .documentVersionId(taskDO.getDocumentVersionId())
+                    .documentVersionUid(textValue(node, "version_id", null))
                     .processTaskId(taskDO.getId())
+                    .processTaskUid(taskDO.getTaskUid())
                     .chunkNo(intValue(node, "chunk_no", 0))
                     .chunkHash(sha256(chunkText.getBytes()))
                     .titlePath(textValue(node, "title_path", "root"))
@@ -475,8 +720,8 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         return errorMessage.length() > 512 ? errorMessage.substring(0, 512) : errorMessage;
     }
 
-    private KnowledgeDocumentDO getExistingDocument(Long documentId) {
-        KnowledgeDocumentDO documentDO = knowledgeDocumentMapper.selectById(documentId);
+    private KnowledgeDocumentDO getExistingDocument(String documentId) {
+        KnowledgeDocumentDO documentDO = knowledgeDocumentMapper.selectByDocumentUid(documentId);
         if (documentDO == null || Integer.valueOf(1).equals(documentDO.getDeleted())) {
             log.warn("文档不存在或已删除，documentId={}", documentId);
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "文档不存在或已删除");
@@ -520,7 +765,7 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
     private RetrievalHitResponse toHitResponse(KnowledgeChunkDO chunkDO, String queryText) {
         return RetrievalHitResponse.builder()
                 .chunkId(chunkDO.getChunkId())
-                .documentId(chunkDO.getDocumentId())
+                .documentId(chunkDO.getDocumentUid())
                 .titlePath(chunkDO.getTitlePath())
                 .contentPreview(chunkDO.getContentPreview())
                 .pageStart(chunkDO.getPageStart())
@@ -613,6 +858,98 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         return value == null || value.isNull() ? defaultValue : value.asInt();
     }
 
+    private int arraySize(JsonNode node) {
+        return node == null || !node.isArray() ? 0 : node.size();
+    }
+
+    private Integer firstBlockIntValue(JsonNode sectionNode, String fieldName) {
+        JsonNode blocksNode = sectionNode.get("blocks");
+        if (blocksNode == null || !blocksNode.isArray() || blocksNode.isEmpty()) {
+            return null;
+        }
+        return intNullable(blocksNode.get(0), fieldName);
+    }
+
+    private String writeJsonString(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception exception) {
+            return node.toString();
+        }
+    }
+
+    private String trimToLength(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    private List<KnowledgeDocumentStructureResponse.DirectoryNode> buildDirectoryTreeResponse(
+            List<KnowledgeDocumentStructureDO> structureList) {
+        if (structureList == null || structureList.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<String, KnowledgeDocumentStructureResponse.DirectoryNode> nodeMap = new LinkedHashMap<>();
+        List<KnowledgeDocumentStructureResponse.DirectoryNode> roots = new ArrayList<>();
+        for (KnowledgeDocumentStructureDO structureDO : structureList) {
+            nodeMap.put(structureDO.getSectionUid(), KnowledgeDocumentStructureResponse.DirectoryNode.builder()
+                    .sectionId(structureDO.getSectionUid())
+                    .parentSectionId(structureDO.getParentSectionUid())
+                    .title(structureDO.getTitle())
+                    .titlePath(structureDO.getTitlePath())
+                    .level(structureDO.getLevel())
+                    .pageStart(structureDO.getPageStart())
+                    .pageEnd(structureDO.getPageEnd())
+                    .blockCount(structureDO.getBlockCount())
+                    .children(new ArrayList<>())
+                    .build());
+        }
+        for (KnowledgeDocumentStructureDO structureDO : structureList) {
+            KnowledgeDocumentStructureResponse.DirectoryNode node = nodeMap.get(structureDO.getSectionUid());
+            String parentSectionUid = structureDO.getParentSectionUid();
+            if (parentSectionUid != null && nodeMap.containsKey(parentSectionUid)) {
+                nodeMap.get(parentSectionUid).getChildren().add(node);
+            } else {
+                roots.add(node);
+            }
+        }
+        return roots;
+    }
+
+    private KnowledgeDocumentStructureResponse.ParseBlock toParseBlockResponse(
+            KnowledgeDocumentParseBlockDO blockDO) {
+        return KnowledgeDocumentStructureResponse.ParseBlock.builder()
+                .parseBlockId(blockDO.getParseBlockUid())
+                .parseBlockName(blockDO.getBlockName())
+                .pageStart(blockDO.getPageStart())
+                .pageEnd(blockDO.getPageEnd())
+                .sectionIds(parseJsonStringList(blockDO.getSectionIdsJson()))
+                .sectionTitles(parseJsonStringList(blockDO.getSectionTitlesJson()))
+                .textPreview(blockDO.getTextPreview())
+                .build();
+    }
+
+    private List<String> parseJsonStringList(String jsonText) {
+        if (jsonText == null || jsonText.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(jsonText);
+            if (!node.isArray()) {
+                return Collections.emptyList();
+            }
+            List<String> values = new ArrayList<>();
+            node.forEach(item -> values.add(item.asText()));
+            return values;
+        } catch (Exception exception) {
+            return Collections.emptyList();
+        }
+    }
+
     private void validateRequest(KnowledgeDocumentUploadRequest request) {
         if (request.getKnowledgeBaseId() == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "知识库 ID 不能为空");
@@ -650,7 +987,10 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
 
     private FileMetadata readAndCheckFile(MultipartFile file) {
         try {
-            String fileName = file.getOriginalFilename();
+            if (file == null || file.isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "上传文件不能为空");
+            }
+            String fileName = normalizeUploadedFileName(file.getOriginalFilename());
             if (fileName == null || fileName.trim().isEmpty()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "文件名不能为空");
             }
@@ -698,24 +1038,140 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
     private KnowledgeDocumentDO createDocument(KnowledgeDocumentUploadRequest request, FileMetadata fileMetadata,
                                                FileResourceDO fileResourceDO) {
         KnowledgeDocumentDO documentDO = knowledgeDocumentConvert.toDocumentDO(
-                request.getKnowledgeBaseId(), request.getDirectoryId(), removeExt(fileMetadata.fileName()), fileResourceDO);
+                request.getKnowledgeBaseId(), request.getDirectoryId(), removeExt(fileMetadata.fileName()), fileResourceDO,
+                uuid32());
         knowledgeDocumentMapper.insert(documentDO);
         return documentDO;
     }
 
-    private KnowledgeDocumentVersionDO createDocumentVersion(KnowledgeDocumentDO documentDO, FileResourceDO fileResourceDO) {
+    private KnowledgeDocumentVersionDO createDocumentVersion(KnowledgeDocumentDO documentDO, FileResourceDO fileResourceDO,
+                                                             Integer versionNo, String requestedParserType) {
+        String chunkConfigSnapshot = buildChunkConfigSnapshot(fileResourceDO.getFileExt(), requestedParserType);
         KnowledgeDocumentVersionDO versionDO = knowledgeDocumentConvert.toVersionDO(
-                documentDO.getId(), 1, fileResourceDO, DEFAULT_CHUNK_CONFIG_SNAPSHOT);
+                documentDO.getId(), versionNo, fileResourceDO, chunkConfigSnapshot, uuid32());
         knowledgeDocumentVersionMapper.insert(versionDO);
         return versionDO;
     }
 
-    private KnowledgeProcessTaskDO createProcessTask(KnowledgeDocumentUploadRequest request, KnowledgeDocumentDO documentDO,
-                                                     KnowledgeDocumentVersionDO versionDO) {
+    /**
+     * 将 PDF 解析器固化到文档版本快照，保证重试和重新处理仍使用同一解析方式。
+     */
+    private String buildChunkConfigSnapshot(String fileExt, String requestedParserType) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("source", "document-upload");
+        if ("pdf".equalsIgnoreCase(fileExt)) {
+            String parserType = requestedParserType == null || requestedParserType.isBlank()
+                    ? DEFAULT_PDF_PARSER : requestedParserType.trim().toLowerCase(Locale.ROOT);
+            if (!PDF_PARSERS.contains(parserType)) {
+                log.warn("PDF 解析器配置非法，parserType={}", requestedParserType);
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "PDF 解析器仅支持 docling、mineru、pdf");
+            }
+            snapshot.put("parserType", parserType);
+        }
+        try {
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (Exception exception) {
+            log.error("生成分片配置快照失败，fileExt={}，parserType={}", fileExt, requestedParserType, exception);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成分片配置快照失败");
+        }
+    }
+
+    private KnowledgeProcessTaskDO createProcessTask(KnowledgeDocumentDO documentDO, KnowledgeDocumentVersionDO versionDO) {
         KnowledgeProcessTaskDO taskDO = knowledgeDocumentConvert.toProcessTaskDO(
-                generateTaskNo(), request.getKnowledgeBaseId(), request.getDirectoryId(), documentDO.getId(), versionDO.getId());
+                uuid32(), generateTaskNo(), documentDO.getKnowledgeBaseId(), documentDO.getDirectoryId(),
+                documentDO.getId(), versionDO.getId());
         knowledgeProcessTaskMapper.insert(taskDO);
         return taskDO;
+    }
+
+    private void ensureNoRunningTask(Long documentId, String actionName) {
+        int runningCount = knowledgeProcessTaskMapper.countRunningByDocumentId(documentId);
+        if (runningCount > 0) {
+            log.warn("文档仍有处理任务未结束，禁止{}，documentId={}，runningTaskCount={}",
+                    actionName, documentId, runningCount);
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR,
+                    "当前文档还有 " + runningCount + " 个未完成处理任务，不能" + actionName + "；如不需要该文档，可以直接删除");
+        }
+    }
+
+    private void refreshDocumentAfterReupload(KnowledgeDocumentDO documentDO, FileResourceDO fileResourceDO,
+                                              KnowledgeDocumentVersionDO versionDO, FileMetadata fileMetadata) {
+        documentDO.setFileResourceId(fileResourceDO.getId());
+        documentDO.setCurrentVersionId(versionDO.getId());
+        documentDO.setName(removeExt(fileMetadata.fileName()));
+        documentDO.setFileName(fileResourceDO.getFileName());
+        documentDO.setFileExt(fileResourceDO.getFileExt());
+        documentDO.setFileSize(fileResourceDO.getFileSize());
+        documentDO.setFileHash(fileResourceDO.getFileHash());
+        documentDO.setParseStatus(DocumentParseStatusEnum.UPLOADED.getCode());
+        documentDO.setIndexStatus(DocumentIndexStatusEnum.WAIT_INDEX.getCode());
+        documentDO.setReviewStatus(DocumentReviewStatusEnum.NOT_SUBMITTED.getCode());
+        documentDO.setPublishStatus(DocumentPublishStatusEnum.UNPUBLISHED.getCode());
+        documentDO.setChunkCount(0);
+        documentDO.setErrorMessage(null);
+    }
+
+    private void resetDocumentForQueuedProcess(KnowledgeDocumentDO documentDO, KnowledgeDocumentVersionDO versionDO) {
+        knowledgeDocumentMapper.update(null, new LambdaUpdateWrapper<KnowledgeDocumentDO>()
+                .eq(KnowledgeDocumentDO::getId, documentDO.getId())
+                .eq(KnowledgeDocumentDO::getDeleted, 0)
+                .set(KnowledgeDocumentDO::getParseStatus, DocumentParseStatusEnum.UPLOADED.getCode())
+                .set(KnowledgeDocumentDO::getIndexStatus, DocumentIndexStatusEnum.WAIT_INDEX.getCode())
+                .set(KnowledgeDocumentDO::getReviewStatus, DocumentReviewStatusEnum.NOT_SUBMITTED.getCode())
+                .set(KnowledgeDocumentDO::getPublishStatus, DocumentPublishStatusEnum.UNPUBLISHED.getCode())
+                .set(KnowledgeDocumentDO::getChunkCount, 0)
+                .set(KnowledgeDocumentDO::getErrorMessage, null));
+        knowledgeDocumentVersionMapper.update(null, new LambdaUpdateWrapper<KnowledgeDocumentVersionDO>()
+                .eq(KnowledgeDocumentVersionDO::getId, versionDO.getId())
+                .eq(KnowledgeDocumentVersionDO::getDeleted, 0)
+                .set(KnowledgeDocumentVersionDO::getParseStatus, DocumentParseStatusEnum.UPLOADED.getCode())
+                .set(KnowledgeDocumentVersionDO::getIndexStatus, DocumentIndexStatusEnum.WAIT_INDEX.getCode())
+                .set(KnowledgeDocumentVersionDO::getChunkCount, 0)
+                .set(KnowledgeDocumentVersionDO::getTokenCount, 0)
+                .set(KnowledgeDocumentVersionDO::getParserName, null)
+                .set(KnowledgeDocumentVersionDO::getEmbeddingModel, null));
+        documentDO.setParseStatus(DocumentParseStatusEnum.UPLOADED.getCode());
+        documentDO.setIndexStatus(DocumentIndexStatusEnum.WAIT_INDEX.getCode());
+        documentDO.setReviewStatus(DocumentReviewStatusEnum.NOT_SUBMITTED.getCode());
+        documentDO.setPublishStatus(DocumentPublishStatusEnum.UNPUBLISHED.getCode());
+        documentDO.setChunkCount(0);
+        documentDO.setErrorMessage(null);
+        versionDO.setParseStatus(DocumentParseStatusEnum.UPLOADED.getCode());
+        versionDO.setIndexStatus(DocumentIndexStatusEnum.WAIT_INDEX.getCode());
+        versionDO.setChunkCount(0);
+        versionDO.setTokenCount(0);
+    }
+
+    private void deleteExclusiveOriginalFiles(Long documentId, List<Long> fileResourceIds) {
+        for (Long fileResourceId : fileResourceIds.stream().distinct().toList()) {
+            FileResourceDO fileResourceDO = fileResourceMapper.selectById(fileResourceId);
+            if (fileResourceDO == null || !Integer.valueOf(0).equals(fileResourceDO.getDeleted())) {
+                continue;
+            }
+            int referenceCount = fileResourceMapper.countActiveReference(fileResourceId, documentId);
+            if (referenceCount > 0) {
+                log.info("文件资源仍被其他文档引用，跳过原文物理删除，fileResourceId={}，referenceCount={}",
+                        fileResourceId, referenceCount);
+                continue;
+            }
+            documentStorageService.deleteObjectIfExists(fileResourceDO.getBucketName(), fileResourceDO.getObjectKey());
+            fileResourceMapper.deleteIfUnreferenced(fileResourceId);
+        }
+    }
+
+    private void softDeleteGovernanceRecords(Long documentId) {
+        knowledgeReviewRecordMapper.update(null, new LambdaUpdateWrapper<KnowledgeReviewRecordDO>()
+                .eq(KnowledgeReviewRecordDO::getDocumentId, documentId)
+                .eq(KnowledgeReviewRecordDO::getDeleted, 0)
+                .set(KnowledgeReviewRecordDO::getDeleted, 1));
+        knowledgePublishRecordMapper.update(null, new LambdaUpdateWrapper<KnowledgePublishRecordDO>()
+                .eq(KnowledgePublishRecordDO::getDocumentId, documentId)
+                .eq(KnowledgePublishRecordDO::getDeleted, 0)
+                .set(KnowledgePublishRecordDO::getDeleted, 1));
+        knowledgeRetrievalTestMapper.update(null, new LambdaUpdateWrapper<KnowledgeRetrievalTestDO>()
+                .eq(KnowledgeRetrievalTestDO::getDocumentId, documentId)
+                .eq(KnowledgeRetrievalTestDO::getDeleted, 0)
+                .set(KnowledgeRetrievalTestDO::getDeleted, 1));
     }
 
     private String sendParseChunkMessage(KnowledgeBaseDO knowledgeBaseDO, KnowledgeDirectoryDO directoryDO,
@@ -724,13 +1180,13 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         String messageId = "msg_" + UUID.randomUUID().toString().replace("-", "");
         DocumentProcessMessage message = DocumentProcessMessage.builder()
                 .messageId(messageId)
-                .taskId(taskDO.getId())
+                .taskId(taskDO.getTaskUid())
                 .taskNo(taskDO.getTaskNo())
                 .stageCode(taskDO.getStageCode())
                 .knowledgeBaseId(knowledgeBaseDO.getId())
                 .directoryId(directoryDO.getId())
-                .documentId(documentDO.getId())
-                .versionId(versionDO.getId())
+                .documentId(documentDO.getDocumentUid())
+                .versionId(versionDO.getVersionUid())
                 .fileResourceId(fileResourceDO.getId())
                 .fileName(fileResourceDO.getFileName())
                 .fileType(fileResourceDO.getFileExt())
@@ -759,6 +1215,31 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
         return dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
     }
 
+    private String normalizeUploadedFileName(String originalFilename) {
+        if (originalFilename == null) {
+            return null;
+        }
+        String fileName = originalFilename.replace("\\", "/");
+        int slashIndex = fileName.lastIndexOf('/');
+        if (slashIndex >= 0) {
+            fileName = fileName.substring(slashIndex + 1);
+        }
+        if (!looksLikeMojibake(fileName)) {
+            return fileName;
+        }
+        String recovered = new String(fileName.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+        return recovered.contains("\uFFFD") ? fileName : recovered;
+    }
+
+    private boolean looksLikeMojibake(String value) {
+        return value.indexOf('Ã') >= 0
+                || value.indexOf('Â') >= 0
+                || value.indexOf('æ') >= 0
+                || value.indexOf('è') >= 0
+                || value.indexOf('å') >= 0
+                || value.indexOf('\uFFFD') >= 0;
+    }
+
     private String sha256(byte[] fileBytes) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hashBytes = digest.digest(fileBytes);
@@ -771,6 +1252,19 @@ public class KnowledgeDocumentServiceImpl implements IKnowledgeDocumentService {
 
     private String generateTaskNo() {
         return "TASK_" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private String uuid32() {
+        return UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private KnowledgeTaskProgressResponse toTaskProgressResponse(KnowledgeProcessTaskDO taskDO) {
+        KnowledgeTaskProgressResponse response = knowledgeDocumentConvert.toTaskProgressResponse(taskDO);
+        KnowledgeDocumentDO documentDO = knowledgeDocumentMapper.selectById(taskDO.getDocumentId());
+        KnowledgeDocumentVersionDO versionDO = knowledgeDocumentVersionMapper.selectById(taskDO.getDocumentVersionId());
+        response.setDocumentId(documentDO == null ? null : documentDO.getDocumentUid());
+        response.setVersionId(versionDO == null ? null : versionDO.getVersionUid());
+        return response;
     }
 
     private record FileMetadata(String fileName, String fileExt, long fileSize, String fileHash,

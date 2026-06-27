@@ -18,6 +18,8 @@ public interface IKnowledgeProcessTaskMapper extends BaseMapper<KnowledgeProcess
      */
     int updateMqMessageId(@Param("id") Long id, @Param("mqMessageId") String mqMessageId);
 
+    KnowledgeProcessTaskDO selectByTaskUid(@Param("taskUid") String taskUid);
+
     /**
      * 更新任务处理中进度。
      */
@@ -35,4 +37,8 @@ public interface IKnowledgeProcessTaskMapper extends BaseMapper<KnowledgeProcess
                      @Param("progress") Integer progress,
                      @Param("errorCode") String errorCode,
                      @Param("errorMessage") String errorMessage);
+
+    int countRunningByDocumentId(@Param("documentId") Long documentId);
+
+    int softDeleteByDocumentId(@Param("documentId") Long documentId);
 }

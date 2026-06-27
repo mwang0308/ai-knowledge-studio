@@ -15,7 +15,7 @@ public class RetrievalTestRequest {
 
     private Long directoryId;
 
-    private Long documentId;
+    private String documentId;
 
     @NotBlank(message = "测试问题不能为空")
     private String queryText;

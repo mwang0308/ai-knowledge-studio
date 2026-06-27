@@ -16,6 +16,16 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minio1234"
     minio_bucket_name: str = "rag-doc"
     chunk_max_chars: int = 1200
+    chunk_overlap_chars: int = 120
+    table_chunk_rows: int = 30
+    pdf_parse_block_pages: int = 10
+    enable_mineru_ocr: bool = True
+    mineru_ocr_adapter: str | None = "app.infrastructure.ocr.mineru_adapter:recognize_pdf_images"
+    mineru_command: str = "mineru"
+    mineru_backend: str = "pipeline"
+    mineru_method: str = "ocr"
+    mineru_lang: str = "ch"
+    mineru_timeout_seconds: int = 300
 
     model_config = SettingsConfigDict(env_prefix="DOCUMENT_PROCESS_", env_file=".env")
 

@@ -34,4 +34,26 @@
         where id = #{versionId}
           and deleted = 0
     </update>
+
+    <select id="selectMaxVersionNo" resultType="java.lang.Integer">
+        select ifnull(max(version_no), 0)
+        from knowledge_document_version
+        where document_id = #{documentId}
+          and deleted = 0
+    </select>
+
+    <select id="selectByDocumentId" resultType="com.aistudio.system.entity.KnowledgeDocumentVersionDO">
+        select *
+        from knowledge_document_version
+        where document_id = #{documentId}
+          and deleted = 0
+        order by version_no asc
+    </select>
+
+    <update id="softDeleteByDocumentId">
+        update knowledge_document_version
+        set deleted = 1
+        where document_id = #{documentId}
+          and deleted = 0
+    </update>
 </mapper>

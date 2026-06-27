@@ -15,5 +15,8 @@ public class KnowledgeDocumentUploadRequest {
 
     private Long directoryId;
 
+    /** PDF 解析器类型：docling、mineru、pdf；非 PDF 文件忽略。 */
+    private String parserType;
+
     private MultipartFile file;
 }

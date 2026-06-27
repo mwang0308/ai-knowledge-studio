@@ -4,6 +4,7 @@ import type {
   KnowledgeChunkPageResult,
   KnowledgeDocumentPageRequest,
   KnowledgeDocumentPageResult,
+  KnowledgeDocumentStructureResult,
   KnowledgeDocumentUploadResult,
   KnowledgeTaskProgressResult,
   PublishSubmitRequest,
@@ -14,21 +15,35 @@ import type {
 import type { Result } from '../types/knowledge';
 
 export function uploadKnowledgeDocument(data: FormData) {
-  return http.post<unknown, KnowledgeDocumentUploadResult>('/knowledge-documents/upload', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  return http.post<unknown, KnowledgeDocumentUploadResult>('/knowledge-documents/upload', data);
+}
+
+export function reuploadKnowledgeDocument(documentId: string, data: FormData) {
+  return http.post<unknown, KnowledgeDocumentUploadResult>(`/knowledge-documents/${documentId}/reupload`, data);
+}
+
+export function reprocessKnowledgeDocument(documentId: string) {
+  return http.post<unknown, KnowledgeDocumentUploadResult>(`/knowledge-documents/${documentId}/reprocess`);
+}
+
+export function deleteKnowledgeDocument(documentId: string) {
+  return http.delete<unknown, Result<boolean>>(`/knowledge-documents/${documentId}`);
 }
 
 export function pageKnowledgeDocument(params: KnowledgeDocumentPageRequest) {
   return http.get<unknown, KnowledgeDocumentPageResult>('/knowledge-documents/page', { params });
 }
 
-export function getKnowledgeTaskProgress(taskId: number) {
+export function getKnowledgeTaskProgress(taskId: string) {
   return http.get<unknown, KnowledgeTaskProgressResult>(`/knowledge-documents/tasks/${taskId}/progress`);
 }
 
 export function pageKnowledgeChunk(params: KnowledgeChunkPageRequest) {
   return http.get<unknown, KnowledgeChunkPageResult>('/knowledge-chunks/page', { params });
+}
+
+export function getKnowledgeDocumentStructure(documentId: string) {
+  return http.get<unknown, KnowledgeDocumentStructureResult>(`/knowledge-documents/${documentId}/structure`);
 }
 
 export function testRetrieval(data: RetrievalTestRequest) {

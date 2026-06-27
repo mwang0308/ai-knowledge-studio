@@ -12,7 +12,7 @@ public class RetrievalHitResponse {
 
     private Integer rankNo;
     private String chunkId;
-    private Long documentId;
+    private String documentId;
     private String titlePath;
     private String contentPreview;
     private Integer pageStart;
